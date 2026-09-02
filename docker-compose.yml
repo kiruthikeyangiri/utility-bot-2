@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  # 1. Python FastAPI Backend (OpenCV, Tesseract OCR, Decision Gate, Groq, History Store)
+  python-service:
+    build:
+      context: ./python_service
+      dockerfile: Dockerfile
+    container_name: id-extractor-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-your_groq_api_key_here}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+    networks:
+      - id-extractor-net
+
+  # 2. React Frontend (Vite + Nginx)
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: id-extractor-client
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - python-service
+    networks:
+      - id-extractor-net
+
+networks:
+  id-extractor-net:
+    driver: bridge

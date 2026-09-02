@@ -1,0 +1,24 @@
+{
+  "name": "utility-bot",
+  "version": "3.0.0",
+  "description": "Utility Bot - ID Document Information Extraction & Verification System",
+  "scripts": {
+    "dev": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "preview": "npm run preview --prefix client",
+    "client": "npm run dev --prefix client",
+    "server": "cd python_service && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+  },
+  "keywords": [
+    "utility-bot",
+    "ocr",
+    "aadhaar",
+    "pan",
+    "driving-licence",
+    "id-verification",
+    "fastapi",
+    "react"
+  ],
+  "author": "Kiruthikeyan S",
+  "license": "MIT"
+}
