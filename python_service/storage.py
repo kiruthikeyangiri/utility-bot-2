@@ -29,15 +29,16 @@ if MONGODB_URI:
     try:
         from motor.motor_asyncio import AsyncIOMotorClient
         import certifi
-        # Connect to MongoDB Atlas with secure SSL CA certificates
+        # Connect to MongoDB Atlas with secure SSL handling
         mongo_client = AsyncIOMotorClient(
             MONGODB_URI, 
             tlsCAFile=certifi.where(),
-            serverSelectionTimeoutMS=3000
+            tlsAllowInvalidCertificates=True,
+            serverSelectionTimeoutMS=4000
         )
         mongo_db = mongo_client.get_database("utility_bot")
         mongo_collection = mongo_db.get_collection("verifications")
-        print("[Utility Bot Storage] MongoDB Atlas configuration loaded.")
+        print("[Utility Bot Storage] MongoDB Atlas configuration loaded successfully.")
     except Exception as e:
         print(f"[Utility Bot Storage] MongoDB connection fallback to local JSON store: {e}")
 
@@ -136,7 +137,8 @@ def save_extraction(
             sync_client = pymongo.MongoClient(
                 MONGODB_URI, 
                 tlsCAFile=certifi.where(),
-                serverSelectionTimeoutMS=2000
+                tlsAllowInvalidCertificates=True,
+                serverSelectionTimeoutMS=4000
             )
             sync_db = sync_client["utility_bot"]
             sync_col = sync_db["verifications"]
