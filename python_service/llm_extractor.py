@@ -121,26 +121,25 @@ def extract_document_info_pure_ocr(
     text_clean = re.sub(r"[ \t]+", " ", text)
     lines = [line.strip() for line in text.split("\n") if line.strip()]
 
-    # 1. Classify document type from heuristic hint or text signatures
-    raw_type = (heuristic_type or "").lower()
+    # 1. Classify document type from text signatures (Override heuristic hint if explicit keywords match)
     text_lower = text.lower()
 
-    if "aadhaar" in raw_type:
-        doc_type = "aadhaar_back" if "back" in raw_type else "aadhaar"
-    elif "pan" in raw_type:
-        doc_type = "pan_back" if "back" in raw_type else "pan"
-    elif "driving" in raw_type or "dl" in raw_type:
-        doc_type = "driving_licence_back" if "back" in raw_type else "driving_licence"
+    if re.search(r"driving\s*licen|indian\s*union\s*driving|form\s*7|dl\s*no|licence\s*to\s*drive|transport\s*dept", text_lower) or re.search(r"\b(tn|dl|mh|ka|kl|up|ap|ts|rj|mp|gj|hr|pb|wb)\d{2}\s*\d{4,14}\b", text_lower):
+        doc_type = "driving_licence_back" if re.search(r"class of vehicle|\bcov\b|\blmv\b|\bmcwg\b|badge\s*no", text_lower) else "driving_licence"
+    elif re.search(r"income\s*tax|permanent\s*account|\b[a-z]{5}[0-9]{4}[a-z]\b", text_lower):
+        doc_type = "pan_back" if re.search(r"if found please return|nsdl|utiitsl", text_lower) else "pan"
+    elif re.search(r"unique\s*identification|aadhaar|uidai|\b\d{4}\s\d{4}\s\d{4}\b|\b\d{12}\b", text_lower):
+        doc_type = "aadhaar_back" if (re.search(r"address\s*:|c/o|s/o|d/o|w/o", text_lower) and not re.search(r"\b\d{4}\s\d{4}\s\d{4}\b", text_lower)) else "aadhaar"
     else:
-        doc_type = "unsupported"
-
-    if doc_type == "unsupported":
-        if re.search(r"income\s*tax|permanent\s*account|\b[a-z]{5}[0-9]{4}[a-z]\b", text_lower):
-            doc_type = "pan_back" if re.search(r"if found please return|nsdl|utiitsl", text_lower) else "pan"
-        elif re.search(r"unique\s*identification|aadhaar|uidai|\b\d{4}\s\d{4}\s\d{4}\b|\b\d{12}\b", text_lower):
-            doc_type = "aadhaar_back" if (re.search(r"address\s*:|c/o|s/o|d/o|w/o", text_lower) and not re.search(r"\b\d{4}\s\d{4}\s\d{4}\b", text_lower)) else "aadhaar"
-        elif re.search(r"driving\s*licen|form\s*7|dl\s*no|transport\s*dept", text_lower):
-            doc_type = "driving_licence_back" if re.search(r"class of vehicle|badge no", text_lower) else "driving_licence"
+        raw_type = (heuristic_type or "").lower()
+        if "aadhaar" in raw_type:
+            doc_type = "aadhaar_back" if "back" in raw_type else "aadhaar"
+        elif "pan" in raw_type:
+            doc_type = "pan_back" if "back" in raw_type else "pan"
+        elif "driving" in raw_type or "dl" in raw_type:
+            doc_type = "driving_licence_back" if "back" in raw_type else "driving_licence"
+        else:
+            doc_type = "unsupported"
 
     # ==================== AADHAAR FRONT ====================
     if doc_type == "aadhaar":
@@ -301,7 +300,7 @@ def extract_document_info_pure_ocr(
         if m_dl:
             dl_num = m_dl.group(1).strip()
         else:
-            m_dl_regex = re.search(r"\b([A-Z]{2}[-\s]?[0-9]{2}[-\s]?[0-9]{4,14})\b", text)
+            m_dl_regex = re.search(r"\b([A-Z]{2}[-\s]?[0-9]{2}[-\s]?[0-9]{4,14})\b", text, re.I)
             if m_dl_regex:
                 dl_num = m_dl_regex.group(1)
 
@@ -316,19 +315,47 @@ def extract_document_info_pure_ocr(
         m_valid = re.search(r"(?:Valid|Validity|Valid Till|NT|TR)\s*[:\s]*(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4})", text, re.I)
         if m_valid:
             valid_until = m_valid.group(1)
+        else:
+            all_dates = re.findall(r"\b(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4})\b", text)
+            if len(all_dates) >= 2 and dob:
+                for d in all_dates:
+                    if d != dob:
+                        valid_until = d
+                        break
 
         name = None
         for i, line in enumerate(lines):
-            if re.search(r"name|holder", line.lower()) and i + 1 < len(lines):
-                name = re.sub(r"[^a-zA-Z\s\.]", "", lines[i+1]).strip()
-                break
+            line_clean = line.strip()
+            if re.search(r"^Name\s*[:\s]*", line_clean, re.I):
+                cand = re.sub(r"^Name\s*[:\s]*", "", line_clean, flags=re.I).strip()
+                if cand and len(cand) > 2:
+                    name = re.sub(r"[^a-zA-Z\s\.]", "", cand).strip()
+                    break
+            elif re.search(r"name|holder", line_clean.lower()) and i + 1 < len(lines):
+                candidate = re.sub(r"[^a-zA-Z\s\.]", "", lines[i+1]).strip()
+                if candidate and len(candidate) > 2 and not any(k in candidate.lower() for k in ["dob", "date", "birth", "licence", "union"]):
+                    name = candidate
+                    break
+
+        if not name:
+            for line in lines:
+                clean_line = re.sub(r"[^a-zA-Z\s\.]", "", line).strip()
+                if clean_line.isupper() and len(clean_line.split()) >= 2 and len(clean_line) > 3:
+                    if not any(k in clean_line.lower() for k in ["indian", "union", "driving", "licence", "license", "government", "transport", "department", "validity", "issue", "son", "daughter", "wife"]):
+                        name = clean_line
+                        break
+
+        address = None
+        m_addr = re.search(r"Address\s*[:\s]*([^\n]+)", text, re.I)
+        if m_addr:
+            address = m_addr.group(1).strip()
 
         return {
             "document_type": "driving_licence",
             "name": name,
             "date_of_birth": dob,
             "dl_number": dl_num,
-            "address": None,
+            "address": address,
             "issue_date": None,
             "valid_until": valid_until
         }

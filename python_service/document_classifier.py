@@ -107,23 +107,33 @@ def classify_document_heuristics(ocr_text: str) -> Tuple[str, float, Dict[str, i
                 scores[doc_type] += matches * 2
 
     # High-priority exact identifiers
-    # 1. PAN Front vs PAN Back
-    if re.search(r"\b[a-z]{5}[0-9]{4}[a-z]\b", text_lower):
-        scores["pan"] += 6
+
+    # 1. Driving Licence Front & Back (Highest Priority for explicit DL text)
+    if re.search(r"driving\s*licen[cs]e|indian\s*union\s*driving|form\s*7|dl\s*no|licence\s*to\s*drive|transport\s*dept|motor\s*vehicles", text_lower):
+        scores["driving_licence"] += 10
+    if re.search(r"\b(tn|dl|mh|ka|kl|up|ap|ts|rj|mp|gj|hr|pb|wb)\d{2}\s*\d{4,14}\b", text_lower):
+        scores["driving_licence"] += 8
+    if re.search(r"class of vehicle|\bcov\b|\blmv\b|\bmcwg\b|badge\s*no|organ donor", text_lower):
+        scores["driving_licence_back"] += 10
+
+    # 2. PAN Front vs PAN Back
+    if re.search(r"income\s*tax\s*department|permanent\s*account\s*number|\b[a-z]{5}[0-9]{4}[a-z]\b", text_lower):
+        scores["pan"] += 10
     if re.search(r"if found please return to|income tax pan services|nsdl|utiitsl|protean", text_lower):
-        scores["pan_back"] += 8
+        scores["pan_back"] += 10
 
-    # 2. Aadhaar Front vs Aadhaar Back
+    # 3. Aadhaar Front vs Aadhaar Back
+    if re.search(r"unique\s*identification\s*authority|uidai|mera\s*aadhaar", text_lower):
+        scores["aadhaar"] += 8
+        scores["aadhaar_back"] += 4
     if re.search(r"\b\d{4}\s\d{4}\s\d{4}\b", text_lower):
-        scores["aadhaar"] += 5
-    if re.search(r"address\s*:|c/o|s/o|d/o|w/o|help@uidai|1947", text_lower):
-        scores["aadhaar_back"] += 6
+        scores["aadhaar"] += 8
 
-    # 3. Driving Licence Front vs Back
-    if re.search(r"driving licen[cs]e|dl\s*no|indian union driving", text_lower):
-        scores["driving_licence"] += 5
-    if re.search(r"class of vehicle|\bcov\b|\blmv\b|\bmcwg\b|badge\s*no", text_lower):
-        scores["driving_licence_back"] += 6
+    # Aadhaar Back specific patterns
+    if re.search(r"help@uidai|1947|www\.uidai\.gov\.in", text_lower):
+        scores["aadhaar_back"] += 10
+    elif re.search(r"address\s*:|c/o|s/o|d/o|w/o", text_lower) and re.search(r"aadhaar|uidai|unique\s*identification", text_lower):
+        scores["aadhaar_back"] += 6
 
     total_score = sum(scores.values())
     if total_score == 0:
@@ -133,14 +143,25 @@ def classify_document_heuristics(ocr_text: str) -> Tuple[str, float, Dict[str, i
     best_score = scores[best_match]
     confidence = min(round(best_score / max(total_score, 1), 2), 1.0)
 
-    # Disambiguate Aadhaar Front vs Back: If 12 digit number AND DOB found, it's Front
-    if scores["aadhaar"] >= 5 and "dob" in text_lower:
+    # Disambiguation Rules:
+    
+    # DL Priority: If DL signatures are present, do NOT allow Aadhaar classification
+    if scores["driving_licence"] >= 8 or scores["driving_licence_back"] >= 8:
+        if scores["driving_licence_back"] > scores["driving_licence"]:
+            best_match = "driving_licence_back"
+        else:
+            best_match = "driving_licence"
+
+    # PAN Priority
+    elif scores["pan"] >= 8 or scores["pan_back"] >= 8:
+        best_match = "pan_back" if scores["pan_back"] > scores["pan"] else "pan"
+
+    # Aadhaar Disambiguation
+    elif scores["aadhaar"] >= 8 and "dob" in text_lower:
         best_match = "aadhaar"
-    # If "address:" or "c/o" is strong without 12-digit number, it's Aadhaar Back
     elif scores["aadhaar_back"] >= 6 and not re.search(r"\b\d{4}\s\d{4}\s\d{4}\b", text_lower):
         best_match = "aadhaar_back"
 
-    # If the score is too low, treat as unsupported
     if best_score < 2:
         return "unsupported", confidence, scores
 
