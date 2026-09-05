@@ -195,8 +195,26 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
     driving_licence_back: 'bg-emerald-100 text-emerald-600',
   }[document_type] || 'bg-slate-100 text-slate-600';
 
+  const handleRetryClick = (e) => {
+    e.preventDefault();
+    if (onRetryScan) {
+      onRetryScan();
+    }
+  };
+
   return (
     <div className="space-y-4">
+
+      {/* Deep Scan Loading Indicator Banner */}
+      {isRetrying && (
+        <div className="p-4 bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-xl shadow-lg border border-indigo-500/40 flex items-center space-x-3 animate-pulse">
+          <RefreshCw className="w-5 h-5 text-indigo-400 animate-spin flex-shrink-0" />
+          <div>
+            <h4 className="text-xs font-bold text-indigo-200">⚡ Deep Multi-Pass OCR Scan in Progress...</h4>
+            <p className="text-[11px] text-slate-300">Applying multi-scale CLAHE, bilateral noise reduction, and re-evaluating text bounding boxes.</p>
+          </div>
+        </div>
+      )}
 
       {/* ================================================================= */}
       {/* 1. COMPACT STATUS HEADER — No buttons, just status                */}
@@ -479,7 +497,7 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
           </p>
           <div className="flex items-center justify-center gap-3">
             <button
-              onClick={onRetryScan}
+              onClick={handleRetryClick}
               disabled={isRetrying || isSubmitting}
               className="inline-flex items-center space-x-2 py-2.5 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 active:from-indigo-700 active:to-indigo-600 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
             >
@@ -503,7 +521,7 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
       {confirmationStatus === 'Success' && (
         <div className="flex items-center justify-center gap-3 pt-1">
           <button
-            onClick={onRetryScan}
+            onClick={handleRetryClick}
             disabled={isRetrying}
             className="inline-flex items-center space-x-1.5 py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] border border-slate-200 transition-all cursor-pointer"
           >
