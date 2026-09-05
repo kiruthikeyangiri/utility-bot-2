@@ -502,7 +502,7 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
               className="inline-flex items-center space-x-2 py-2.5 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 active:from-indigo-700 active:to-indigo-600 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
             >
               <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
-              <span>{isRetrying ? 'Deep Scanning...' : '🔄 Retry Scan'}</span>
+              <span>{isRetrying ? 'Deep Scanning...' : 'Retry Scan'}</span>
             </button>
 
             <button
@@ -511,7 +511,7 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
               className="inline-flex items-center space-x-2 py-2.5 px-6 rounded-xl bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-white font-bold text-xs shadow-md transition-all cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
             >
               <Upload className="w-4 h-4" />
-              <span>📁 Upload New</span>
+              <span>Upload New</span>
             </button>
           </div>
         </div>
