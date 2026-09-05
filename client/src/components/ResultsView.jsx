@@ -448,9 +448,9 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
         </div>
       )}
 
-      {/* Primary Actions: ✓ Correct / ✗ Wrong */}
-      {!isDecided && !showWrongActions && (
-        <div className="flex items-center justify-center gap-3">
+      {/* 1. Primary Actions: ✓ Correct / ✗ Wrong (Shown before any decision is made) */}
+      {confirmationStatus === 'Pending Confirmation' && !showWrongActions && (
+        <div className="flex items-center justify-center gap-3 pt-1">
           <button
             onClick={() => handleConfirmAction('correct')}
             disabled={isSubmitting}
@@ -471,37 +471,37 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
         </div>
       )}
 
-      {/* Secondary Actions — Only after clicking ✗ Wrong */}
-      {showWrongActions && !isDecided && (
-        <div className="space-y-2.5 animate-in slide-in-from-bottom-2 fade-in duration-300">
+      {/* 2. Secondary Actions: Shown when marked as Wrong or status is Failed */}
+      {(showWrongActions || confirmationStatus === 'Failed') && (
+        <div className="space-y-2.5 pt-1 animate-in slide-in-from-bottom-2 fade-in duration-300">
           <p className="text-[11px] text-slate-500 text-center font-medium">
-            Marked as incorrect — choose next action:
+            Document rejected. Choose next action:
           </p>
           <div className="flex items-center justify-center gap-3">
             <button
               onClick={onRetryScan}
               disabled={isRetrying || isSubmitting}
-              className="inline-flex items-center space-x-2 py-2.5 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-semibold text-xs shadow-sm shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:shadow-md"
+              className="inline-flex items-center space-x-2 py-2.5 px-6 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 active:from-indigo-700 active:to-indigo-600 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />
-              <span>{isRetrying ? 'Scanning...' : 'Retry Scan'}</span>
+              <RefreshCw className={`w-4 h-4 ${isRetrying ? 'animate-spin' : ''}`} />
+              <span>{isRetrying ? 'Deep Scanning...' : '🔄 Retry Scan'}</span>
             </button>
 
             <button
               onClick={onUploadAnother}
               disabled={isSubmitting}
-              className="inline-flex items-center space-x-2 py-2.5 px-5 rounded-xl bg-slate-600 hover:bg-slate-500 active:bg-slate-700 text-white font-semibold text-xs shadow-sm transition-all cursor-pointer hover:shadow-md"
+              className="inline-flex items-center space-x-2 py-2.5 px-6 rounded-xl bg-slate-700 hover:bg-slate-600 active:bg-slate-800 text-white font-bold text-xs shadow-md transition-all cursor-pointer hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
             >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Upload New</span>
+              <Upload className="w-4 h-4" />
+              <span>📁 Upload New</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Post-decision — small utility buttons */}
-      {isDecided && (
-        <div className="flex items-center justify-center gap-3">
+      {/* 3. Post-Success Actions: Shown when status is Success */}
+      {confirmationStatus === 'Success' && (
+        <div className="flex items-center justify-center gap-3 pt-1">
           <button
             onClick={onRetryScan}
             disabled={isRetrying}

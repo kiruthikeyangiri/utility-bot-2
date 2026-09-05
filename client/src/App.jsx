@@ -60,13 +60,16 @@ export default function App() {
   };
 
   const handleRetryScan = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile) {
+      alert("No image file loaded in current session. Please upload an image file to perform a deep retry scan.");
+      return;
+    }
 
     setIsRetrying(true);
     setErrorMessage(null);
 
     try {
-      // Deep Multi-Pass OCR scan with bilateral denoising
+      // Deep Multi-Pass OCR scan with bilateral denoising & contrast enhancement
       const result = await extractDocumentApi(selectedFile, settings, true);
       setExtractionResult(result);
       setActiveTab('fields');
