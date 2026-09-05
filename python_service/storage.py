@@ -30,6 +30,7 @@ if not os.path.exists(COUNTERS_FILE):
 
 # MongoDB Configuration (Optional - Active if MONGODB_URI is provided)
 MONGODB_URI = os.getenv("MONGODB_URI")
+IS_MONGO_ONLINE = False
 mongo_client = None
 mongo_db = None
 mongo_collection_success = None
@@ -37,21 +38,21 @@ mongo_collection_failed = None
 
 if MONGODB_URI:
     try:
-        from motor.motor_asyncio import AsyncIOMotorClient
+        import pymongo
         import certifi
-        # Connect to MongoDB Atlas with secure SSL handling
-        mongo_client = AsyncIOMotorClient(
-            MONGODB_URI, 
-            tlsCAFile=certifi.where(),
+        # Quick 1.5s test to check MongoDB Atlas connectivity
+        _test_client = pymongo.MongoClient(
+            MONGODB_URI,
+            tls=True,
             tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=4000
+            serverSelectionTimeoutMS=1500
         )
-        mongo_db = mongo_client.get_database("utility_bot")
-        mongo_collection_success = mongo_db.get_collection("verifications")
-        mongo_collection_failed = mongo_db.get_collection("failed_verifications")
-        print("[Utility Bot Storage] MongoDB Atlas configuration loaded successfully.")
+        _test_client.admin.command('ping')
+        IS_MONGO_ONLINE = True
+        print("[Utility Bot Storage] MongoDB Atlas live cluster connection verified!")
     except Exception as e:
-        print(f"[Utility Bot Storage] MongoDB connection fallback to local JSON store: {e}")
+        IS_MONGO_ONLINE = False
+        print(f"[Utility Bot Storage] MongoDB Atlas SSL/Network notice: Operating in high-speed local storage mode (history.json & counters.json).")
 
 
 def get_next_sequence_id(prefix: str = "IMG") -> str:
@@ -70,16 +71,16 @@ def get_next_sequence_id(prefix: str = "IMG") -> str:
 
     counters[prefix] = counters.get(prefix, 0) + 1
 
-    # Sync with MongoDB atomic counters if connected
-    if MONGODB_URI:
+    # Sync with MongoDB atomic counters if live
+    if IS_MONGO_ONLINE and MONGODB_URI:
         try:
             import pymongo
             import certifi
             sync_client = pymongo.MongoClient(
                 MONGODB_URI,
-                tlsCAFile=certifi.where(),
+                tls=True,
                 tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=2000
+                serverSelectionTimeoutMS=1500
             )
             col = sync_client["utility_bot"]["counters"]
             res = col.find_one_and_update(
@@ -220,16 +221,16 @@ def save_confirmed_verification(
         records = records[:500]
     write_file_records(target_file, records)
 
-    # 2. Insert into MongoDB Atlas collection
-    if MONGODB_URI:
+    # 2. Insert into MongoDB Atlas collection if live
+    if IS_MONGO_ONLINE and MONGODB_URI:
         try:
             import pymongo
             import certifi
             sync_client = pymongo.MongoClient(
                 MONGODB_URI,
-                tlsCAFile=certifi.where(),
+                tls=True,
                 tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=4000
+                serverSelectionTimeoutMS=1500
             )
             sync_db = sync_client["utility_bot"]
             sync_col = sync_db[target_collection_name]

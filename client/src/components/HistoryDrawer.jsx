@@ -14,7 +14,7 @@ export default function HistoryDrawer({ isOpen, onClose, onSelectDocument }) {
     setIsLoading(true);
     try {
       const [historyData, statsData] = await Promise.all([
-        getHistoryApi({ limit: 50, type: typeFilter || undefined }),
+        getHistoryApi({ limit: 50, doc_type: typeFilter || undefined }),
         getStorageStatsApi(),
       ]);
       setHistory(historyData.documents || []);
