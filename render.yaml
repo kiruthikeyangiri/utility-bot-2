@@ -1,0 +1,15 @@
+﻿services:
+  - type: web
+    name: utility-bot-app
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_APP_ID
+        sync: false
+      - key: MONGODB_DATA_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

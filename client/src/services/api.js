@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Connect directly to Python FastAPI backend on port 8000 (with CORS enabled)
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Connect directly to Python FastAPI backend (auto-adapts to unified domain in production)
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:8000' : (typeof window !== 'undefined' ? window.location.origin : ''));
 
 /**
  * Generates a deterministic, REAL Hardware & Browser Fingerprint for this physical device.

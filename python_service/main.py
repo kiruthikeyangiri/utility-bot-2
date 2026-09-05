@@ -21,6 +21,8 @@ except Exception:
 from typing import Optional, Dict, Any
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from PIL import Image
 import numpy as np
 from dotenv import load_dotenv
@@ -356,6 +358,32 @@ def extract_document(
     return final_result
 
 
+# -----------------------------------------------------------------------------
+# Unified Full-Stack Serving: React Client + FastAPI Backend in One Service
+# -----------------------------------------------------------------------------
+DIST_DIR = os.path.join(os.path.dirname(__file__), "..", "client", "dist")
+if not os.path.exists(DIST_DIR):
+    DIST_DIR = os.path.join(os.path.dirname(__file__), "dist")
+
+if os.path.exists(DIST_DIR):
+    assets_dir = os.path.join(DIST_DIR, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        if full_path.startswith(("docs", "openapi.json", "redoc")):
+            raise HTTPException(status_code=404, detail="Not found")
+        file_path = os.path.join(DIST_DIR, full_path)
+        if full_path and os.path.exists(file_path) and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_file = os.path.join(DIST_DIR, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Frontend not built. Run 'npm run build' in client directory.")
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
