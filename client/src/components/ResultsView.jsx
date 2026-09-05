@@ -437,7 +437,7 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
             </span>
             {result.ocr_confidence > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-slate-200/80 text-slate-600 font-bold text-[10px]">
-                {(result.ocr_confidence * 100).toFixed(1)}%
+                {result.ocr_confidence.toFixed(1)}%
               </span>
             )}
           </div>

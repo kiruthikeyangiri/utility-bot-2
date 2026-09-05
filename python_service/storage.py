@@ -28,31 +28,62 @@ if not os.path.exists(COUNTERS_FILE):
     with open(COUNTERS_FILE, "w", encoding="utf-8") as f:
         json.dump({"IMG": 0, "FAIL": 0}, f)
 
-# MongoDB Configuration (Optional - Active if MONGODB_URI is provided)
-MONGODB_URI = os.getenv("MONGODB_URI")
-IS_MONGO_ONLINE = False
-mongo_client = None
-mongo_db = None
-mongo_collection_success = None
-mongo_collection_failed = None
+# ---------------------------------------------------------------------------
+# MongoDB Atlas Data API (HTTPS REST) — Bypasses Python 3.14 TLS issues
+# Requires: MONGODB_DATA_API_KEY and MONGODB_APP_ID in .env
+# ---------------------------------------------------------------------------
+MONGODB_URI = os.getenv("MONGODB_URI")          # kept for display/compat only
+MONGODB_DATA_API_KEY = os.getenv("MONGODB_DATA_API_KEY", "")
+MONGODB_APP_ID = os.getenv("MONGODB_APP_ID", "")
+MONGODB_DB_NAME = "utility_bot"
+MONGODB_CLUSTER = "Cluster0"
 
-if MONGODB_URI:
+# Build the Data API base URL from App ID if available
+_ATLAS_DATA_URL = f"https://data.mongodb-api.com/app/{MONGODB_APP_ID}/endpoint/data/v1" if MONGODB_APP_ID else ""
+
+IS_MONGO_ONLINE = False
+
+def _atlas_request(action: str, collection: str, body: dict) -> dict:
+    """Send a request to MongoDB Atlas Data API (HTTPS POST). Thread-safe, no TLS issues."""
+    if not _ATLAS_DATA_URL or not MONGODB_DATA_API_KEY:
+        return {}
+    import urllib.request
+    url = f"{_ATLAS_DATA_URL}/action/{action}"
+    payload = {
+        "dataSource": MONGODB_CLUSTER,
+        "database": MONGODB_DB_NAME,
+        "collection": collection,
+        **body
+    }
+    data = json.dumps(payload, default=str).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "api-key": MONGODB_DATA_API_KEY,
+        },
+        method="POST"
+    )
     try:
-        import pymongo
-        import certifi
-        # Quick 1.5s test to check MongoDB Atlas connectivity
-        _test_client = pymongo.MongoClient(
-            MONGODB_URI,
-            tls=True,
-            tlsAllowInvalidCertificates=True,
-            serverSelectionTimeoutMS=1500
-        )
-        _test_client.admin.command('ping')
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as err:
+        raise RuntimeError(f"Atlas Data API error: {err}") from err
+
+# Check Atlas Data API availability at startup
+if MONGODB_APP_ID and MONGODB_DATA_API_KEY:
+    try:
+        result = _atlas_request("find", "verifications", {"limit": 1, "filter": {}})
         IS_MONGO_ONLINE = True
-        print("[Utility Bot Storage] MongoDB Atlas live cluster connection verified!")
-    except Exception as e:
+        print("[Utility Bot Storage] MongoDB Atlas Data API connection verified! Cloud sync active.")
+    except Exception as _e:
         IS_MONGO_ONLINE = False
-        print(f"[Utility Bot Storage] MongoDB Atlas SSL/Network notice: Operating in high-speed local storage mode (history.json & counters.json).")
+        print(f"[Utility Bot Storage] MongoDB Atlas Data API unavailable: {_e}. Using local JSON storage.")
+else:
+    IS_MONGO_ONLINE = False
+    if MONGODB_URI:
+        print("[Utility Bot Storage] MONGODB_DATA_API_KEY / MONGODB_APP_ID not set — using local JSON storage. See .env setup.")
 
 
 def get_next_sequence_id(prefix: str = "IMG") -> str:
@@ -71,26 +102,19 @@ def get_next_sequence_id(prefix: str = "IMG") -> str:
 
     counters[prefix] = counters.get(prefix, 0) + 1
 
-    # Sync with MongoDB atomic counters if live
-    if IS_MONGO_ONLINE and MONGODB_URI:
+    # Sync counter with MongoDB Atlas Data API if live
+    if IS_MONGO_ONLINE:
         try:
-            import pymongo
-            import certifi
-            sync_client = pymongo.MongoClient(
-                MONGODB_URI,
-                tls=True,
-                tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=1500
-            )
-            col = sync_client["utility_bot"]["counters"]
-            res = col.find_one_and_update(
-                {"_id": prefix},
-                {"$inc": {"seq": 1}},
-                upsert=True,
-                return_document=pymongo.ReturnDocument.AFTER
-            )
-            if res and "seq" in res:
-                counters[prefix] = max(counters[prefix], int(res["seq"]))
+            # Upsert counter document via Atlas Data API
+            _atlas_request("updateOne", "counters", {
+                "filter": {"_id": prefix},
+                "update": {"$inc": {"seq": 1}, "$setOnInsert": {"_id": prefix}},
+                "upsert": True
+            })
+            # Read back updated counter
+            res = _atlas_request("findOne", "counters", {"filter": {"_id": prefix}})
+            if res and res.get("document") and "seq" in res["document"]:
+                counters[prefix] = max(counters[prefix], int(res["document"]["seq"]))
         except Exception:
             pass
 
@@ -221,21 +245,15 @@ def save_confirmed_verification(
         records = records[:500]
     write_file_records(target_file, records)
 
-    # 2. Insert into MongoDB Atlas collection if live
-    if IS_MONGO_ONLINE and MONGODB_URI:
+    # 2. Sync to MongoDB Atlas via Data API (HTTPS) if live
+    if IS_MONGO_ONLINE:
         try:
-            import pymongo
-            import certifi
-            sync_client = pymongo.MongoClient(
-                MONGODB_URI,
-                tls=True,
-                tlsAllowInvalidCertificates=True,
-                serverSelectionTimeoutMS=1500
-            )
-            sync_db = sync_client["utility_bot"]
-            sync_col = sync_db[target_collection_name]
-            sync_col.replace_one({"_id": seq_id}, record, upsert=True)
-            print(f"[Utility Bot Storage] Synced {seq_id} ({status}) to MongoDB Atlas '{target_collection_name}'!")
+            _atlas_request("replaceOne", target_collection_name, {
+                "filter": {"_id": seq_id},
+                "replacement": record,
+                "upsert": True
+            })
+            print(f"[Utility Bot Storage] Synced {seq_id} ({status}) to MongoDB Atlas '{target_collection_name}' via Data API!")
         except Exception as err:
             print(f"[Utility Bot Storage] MongoDB sync notice (local backup preserved): {err}")
 
@@ -342,16 +360,9 @@ def delete_extraction_by_id(doc_id: str, device_id: Optional[str] = None) -> boo
             
     if found:
         write_file_records(HISTORY_FILE, new_history)
-        if MONGODB_URI:
+        if IS_MONGO_ONLINE:
             try:
-                import pymongo, certifi
-                sync_client = pymongo.MongoClient(
-                    MONGODB_URI,
-                    tlsCAFile=certifi.where(),
-                    tlsAllowInvalidCertificates=True,
-                    serverSelectionTimeoutMS=2000
-                )
-                sync_client["utility_bot"]["verifications"].delete_one({"_id": doc_id})
+                _atlas_request("deleteOne", "verifications", {"filter": {"_id": doc_id}})
             except Exception:
                 pass
         return True
