@@ -102,10 +102,13 @@ api.interceptors.request.use((config) => {
 /**
  * Uploads ID document image directly to Python FastAPI backend.
  */
-export const extractDocumentApi = async (file, settings = {}) => {
+export const extractDocumentApi = async (file, settings = {}, isDeepScan = false) => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('deviceId', getDeviceId());
+  if (isDeepScan) {
+    formData.append('deep_scan', 'true');
+  }
 
   Object.entries(settings).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
@@ -119,6 +122,20 @@ export const extractDocumentApi = async (file, settings = {}) => {
     },
   });
 
+  return response.data;
+};
+
+/**
+ * Submits Human-in-the-Loop confirmation decision ('correct' or 'wrong').
+ * - 'correct': Assigns sequential ID 'IMG000001', sets status='Success', saves to 'verifications' (Public History)
+ * - 'wrong': Assigns sequential ID 'FAIL000001', sets status='Failed', saves to 'failed_verifications' (Hidden)
+ */
+export const confirmVerificationApi = async (payload) => {
+  const data = {
+    ...payload,
+    deviceId: getDeviceId(),
+  };
+  const response = await api.post('/confirm', data);
   return response.data;
 };
 

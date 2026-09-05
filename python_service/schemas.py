@@ -35,6 +35,7 @@ class AadhaarData(BaseModel):
     gender: Optional[str] = Field(None, description="Gender (Male/Female/Transgender)")
     aadhaar_number: Optional[str] = Field(None, description="12-digit Aadhaar number (masked in final output)")
     address: Optional[str] = Field(None, description="Complete address if present")
+    portrait_photo: Optional[str] = Field(None, description="Base64 encoded cropped portrait photo of the cardholder")
 
 
 class AadhaarBackData(BaseModel):
@@ -54,6 +55,7 @@ class PANData(BaseModel):
     father_name: Optional[str] = Field(None, description="Father's name of cardholder")
     date_of_birth: Optional[str] = Field(None, description="Date of birth in YYYY-MM-DD or raw format")
     pan_number: Optional[str] = Field(None, description="10-character PAN number (e.g. ABCDE1234F)")
+    portrait_photo: Optional[str] = Field(None, description="Base64 encoded cropped portrait photo of the cardholder")
 
 
 class PANBackData(BaseModel):
@@ -75,6 +77,7 @@ class DrivingLicenceData(BaseModel):
     address: Optional[str] = Field(None, description="Residential address")
     issue_date: Optional[str] = Field(None, description="Date of issue in YYYY-MM-DD format")
     valid_until: Optional[str] = Field(None, description="Licence expiry date in YYYY-MM-DD format")
+    portrait_photo: Optional[str] = Field(None, description="Base64 encoded cropped portrait photo of the cardholder")
 
 
 class DrivingLicenceBackData(BaseModel):
@@ -109,7 +112,10 @@ ExtractedData = Union[
 
 class FinalExtractionResult(BaseModel):
     """Final unified payload returned to the UI/API."""
-    id: Optional[str] = Field(None, description="Unique stored document ID")
+    id: Optional[str] = Field(None, description="Sequential or stored document ID (e.g. IMG000001, FAIL000001)")
+    sequential_id: Optional[str] = Field(None, description="Assigned sequential verification code")
+    status: str = Field("Pending Confirmation", description="Pending Confirmation, Success, or Failed")
+    audit_action: Optional[str] = Field(None, description="CORRECT, WRONG, or PENDING")
     document_type: str
     is_valid: bool = Field(True, description="True if document is supported and validly parsed")
     short_circuited: bool = Field(False, description="True if decision gate rejected before LLM call")
@@ -118,6 +124,24 @@ class FinalExtractionResult(BaseModel):
     data: ExtractedData
     warnings: List[str] = Field(default_factory=list, description="Validation warnings or data quality alerts")
     ocr_confidence: float = Field(0.0, description="Average OCR confidence score")
-    raw_ocr_text: Optional[str] = Field(None, description="Raw OCR text extracted from image")
-    quality_report: Optional[Dict[str, Any]] = Field(None, description="Image sharpness and resolution metrics")
-    images: Optional[Dict[str, str]] = Field(default_factory=dict, description="Base64 encoded visual pipeline images")
+    raw_ocr_text: str = Field("", description="Raw recognized OCR text")
+    quality_report: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Image quality metrics")
+    images: Optional[Dict[str, str]] = Field(default_factory=dict, description="Pipeline stage image base64 strings")
+    portrait_photo: Optional[str] = Field(None, description="Extracted cardholder portrait photo thumbnail")
+
+
+class ConfirmationRequest(BaseModel):
+    """Payload sent by Human-in-the-Loop gateway when confirming verification."""
+    action: Literal["correct", "wrong"] = Field(..., description="'correct' (Success -> verifications) or 'wrong' (Failed -> failed_verifications)")
+    data: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Final user-edited extracted field values")
+    document_type: str = Field("aadhaar", description="Document type")
+    is_valid: bool = Field(True, description="Whether document is valid")
+    authenticity_status: str = Field("VERIFIED", description="VERIFIED or DUPLICATE_COPY")
+    raw_ocr_text: Optional[str] = Field("", description="Raw OCR text")
+    ocr_confidence: Optional[float] = Field(0.0, description="OCR confidence score")
+    original_filename: Optional[str] = Field("document.jpg", description="Original file name")
+    thumbnail_image: Optional[str] = Field(None, description="Original image thumbnail")
+    portrait_photo: Optional[str] = Field(None, description="Cropped face portrait thumbnail")
+    quality_report: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Quality report metrics")
+    warnings: Optional[List[str]] = Field(default_factory=list, description="Validation warnings")
+    deviceId: Optional[str] = Field("default_client", description="Client Device ID")

@@ -237,7 +237,8 @@ def validate_and_clean_extraction(
     raw_ocr_text: Optional[str] = None,
     quality_report: Optional[Dict[str, Any]] = None,
     images: Optional[Dict[str, str]] = None,
-    short_circuited: bool = False
+    short_circuited: bool = False,
+    portrait_photo: Optional[str] = None
 ) -> FinalExtractionResult:
     """Main validation pipeline that parses LLM output into typed Pydantic models and checks for duplicates."""
     doc_type = raw_data.get("document_type", "unsupported").lower()
@@ -259,13 +260,15 @@ def validate_and_clean_extraction(
         gender = sanitize_gender(raw_data.get("gender"))
         
         dob, dob_warn = normalize_date(raw_data.get("date_of_birth"))
-        if dob_warn:
+        if dob_warn and not dob:
             warnings.append(dob_warn)
 
         yob = raw_data.get("year_of_birth")
-        if yob and not re.match(r"^\d{4}$", str(yob)):
-            warnings.append(f"Invalid year of birth: '{yob}'")
-            yob = None
+        if yob and not dob:
+            try:
+                yob = int(str(yob).strip())
+            except Exception:
+                yob = None
 
         aadhaar_num, num_warn = validate_and_mask_aadhaar(raw_num)
         warnings.extend(num_warn)
@@ -281,21 +284,24 @@ def validate_and_clean_extraction(
             year_of_birth=str(yob) if yob else None,
             gender=gender,
             aadhaar_number=aadhaar_num,
-            address=address
+            address=address,
+            portrait_photo=portrait_photo
         )
 
         return FinalExtractionResult(
             document_type="aadhaar",
             is_valid=True,
+            status="Pending Confirmation",
             short_circuited=False,
             is_duplicate_or_sample=is_duplicate,
             authenticity_status=auth_status,
             data=aadhaar_model,
             warnings=warnings,
             ocr_confidence=ocr_confidence,
-            raw_ocr_text=raw_ocr_text,
-            quality_report=quality_report,
-            images=images or {}
+            raw_ocr_text=raw_ocr_text or "",
+            quality_report=quality_report or {},
+            images=images or {},
+            portrait_photo=portrait_photo
         )
 
     # 2. AADHAAR BACK (Address Side)
@@ -416,21 +422,24 @@ def validate_and_clean_extraction(
             name=name,
             father_name=father_name,
             date_of_birth=dob,
-            pan_number=pan_num
+            pan_number=pan_num,
+            portrait_photo=portrait_photo
         )
 
         return FinalExtractionResult(
             document_type="pan",
             is_valid=True,
+            status="Pending Confirmation",
             short_circuited=False,
             is_duplicate_or_sample=is_duplicate,
             authenticity_status=auth_status,
             data=pan_model,
             warnings=warnings,
             ocr_confidence=ocr_confidence,
-            raw_ocr_text=raw_ocr_text,
-            quality_report=quality_report,
-            images=images or {}
+            raw_ocr_text=raw_ocr_text or "",
+            quality_report=quality_report or {},
+            images=images or {},
+            portrait_photo=portrait_photo
         )
 
     # 4. PAN BACK (Barcode/Disclaimer Side)
@@ -446,14 +455,15 @@ def validate_and_clean_extraction(
         return FinalExtractionResult(
             document_type="pan_back",
             is_valid=True,
+            status="Pending Confirmation",
             short_circuited=False,
             is_duplicate_or_sample=is_duplicate,
             authenticity_status=auth_status,
             data=pan_back_model,
             warnings=warnings,
             ocr_confidence=ocr_confidence,
-            raw_ocr_text=raw_ocr_text,
-            quality_report=quality_report,
+            raw_ocr_text=raw_ocr_text or "",
+            quality_report=quality_report or {},
             images=images or {}
         )
 
@@ -462,15 +472,15 @@ def validate_and_clean_extraction(
         name = clean_name(raw_data.get("name"))
         
         dob, dob_warn = normalize_date(raw_data.get("date_of_birth"))
-        if dob_warn:
+        if dob_warn and not dob:
             warnings.append(dob_warn)
 
         issue_date, issue_warn = normalize_date(raw_data.get("issue_date"))
-        if issue_warn:
+        if issue_warn and not issue_date:
             warnings.append(issue_warn)
 
         valid_until, valid_warn = normalize_date(raw_data.get("valid_until"))
-        if valid_warn:
+        if valid_warn and not valid_until:
             warnings.append(valid_warn)
 
         raw_dl = raw_data.get("dl_number")
@@ -493,21 +503,24 @@ def validate_and_clean_extraction(
             dl_number=dl_num,
             address=address,
             issue_date=issue_date,
-            valid_until=valid_until
+            valid_until=valid_until,
+            portrait_photo=portrait_photo
         )
 
         return FinalExtractionResult(
             document_type="driving_licence",
             is_valid=True,
+            status="Pending Confirmation",
             short_circuited=False,
             is_duplicate_or_sample=is_duplicate,
             authenticity_status=auth_status,
             data=dl_model,
             warnings=warnings,
             ocr_confidence=ocr_confidence,
-            raw_ocr_text=raw_ocr_text,
-            quality_report=quality_report,
-            images=images or {}
+            raw_ocr_text=raw_ocr_text or "",
+            quality_report=quality_report or {},
+            images=images or {},
+            portrait_photo=portrait_photo
         )
 
     # 6. DRIVING LICENCE BACK

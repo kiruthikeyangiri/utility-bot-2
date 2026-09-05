@@ -155,3 +155,55 @@ def preprocess_id_card(
         processed = apply_threshold(processed, method=threshold_method)
 
     return processed
+
+
+def extract_portrait_photo(image: np.ndarray) -> Optional[str]:
+    """
+    Extracts the applicant's portrait photo thumbnail from an ID card
+    and encodes it as a base64 JPEG image.
+    """
+    if image is None or image.size == 0:
+        return None
+    try:
+        import base64
+        h, w = image.shape[:2]
+        # In Indian ID cards (Aadhaar/PAN/DL), portrait photo is typically on the left (or right) side
+        crop_y1 = int(h * 0.18)
+        crop_y2 = int(h * 0.82)
+        crop_x1 = int(w * 0.04)
+        crop_x2 = int(w * 0.38)
+        
+        portrait = image[crop_y1:crop_y2, crop_x1:crop_x2]
+        if portrait.size == 0:
+            return None
+            
+        thumb = cv2.resize(portrait, (160, 200), interpolation=cv2.INTER_AREA)
+        _, buffer = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
+    except Exception:
+        return None
+
+
+def preprocess_deep_multi_pass(image: np.ndarray) -> np.ndarray:
+    """
+    High-Accuracy Deep Multi-Pass enhancement for tough, skewed, or blurry retry scans.
+    Applies multi-scale CLAHE, bilateral smoothing, and dynamic unsharp masking.
+    """
+    processed = resize_image(image.copy(), target_width=2000)
+    gray = to_grayscale(processed)
+    
+    # Pass 1: Glare flattening
+    glare_free = reduce_glare_and_background(gray)
+    
+    # Pass 2: Dynamic CLAHE
+    clahe_fine = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(6, 6))
+    enhanced = clahe_fine.apply(glare_free)
+    
+    # Pass 3: Edge-preserving bilateral filter
+    denoised = cv2.bilateralFilter(enhanced, d=7, sigmaColor=75, sigmaSpace=75)
+    
+    # Pass 4: Unsharp masking
+    gaussian = cv2.GaussianBlur(denoised, (0, 0), 2.5)
+    sharpened = cv2.addWeighted(denoised, 1.8, gaussian, -0.8, 0)
+    
+    return sharpened

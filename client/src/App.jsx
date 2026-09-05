@@ -23,6 +23,7 @@ export default function App() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [extractionResult, setExtractionResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [activeTab, setActiveTab] = useState('fields');
@@ -55,6 +56,26 @@ export default function App() {
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRetryScan = async () => {
+    if (!selectedFile) return;
+
+    setIsRetrying(true);
+    setErrorMessage(null);
+
+    try {
+      // Deep Multi-Pass OCR scan with bilateral denoising
+      const result = await extractDocumentApi(selectedFile, settings, true);
+      setExtractionResult(result);
+      setActiveTab('fields');
+    } catch (err) {
+      console.error('Retry scan failed:', err);
+      const msg = err.response?.data?.error || err.message || 'Deep scan retry failed.';
+      setErrorMessage(msg);
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -196,6 +217,8 @@ export default function App() {
               <ResultsView 
                 result={extractionResult} 
                 onUploadAnother={handleClear}
+                onRetryScan={handleRetryScan}
+                isRetrying={isRetrying}
               />
             )}
 
@@ -209,7 +232,7 @@ export default function App() {
               <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-900">OCR Extracted Text & Line Sequences</h3>
-                  <p className="text-xs text-slate-500">Text lines detected directly by Tesseract OCR</p>
+                  <p className="text-xs text-slate-500">Text lines detected directly by RapidOCR Engine</p>
                 </div>
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 max-h-[400px] overflow-auto">
                   <pre className="text-xs text-slate-800 font-mono whitespace-pre-wrap leading-relaxed">
