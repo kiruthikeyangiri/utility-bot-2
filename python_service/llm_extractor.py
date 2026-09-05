@@ -406,29 +406,33 @@ def extract_document_info(
     temperature: float = 0.0
 ) -> Tuple[Dict[str, Any], Optional[str]]:
     """
-    Extracts structured data from OCR text.
-    If Groq API key is present, uses Groq LLM with fallback to pure OCR.
-    If no API key is present, executes ultra-fast Pure OCR rule-based extraction directly.
+    Main extraction function.
+    Runs high-speed local pure OCR extraction first (100% offline).
+    If Groq LLM API Key is provided, uses LLM for optional enhancement.
     """
-    if not ocr_raw_text or not ocr_raw_text.strip():
-        return {
-            "document_type": "unsupported",
-            "error": "No readable text detected in the image."
-        }, "No text was detected by the OCR engine."
+    # 1. Always run high-precision 100% offline Pure OCR Rule-Based Extractor
+    pure_ocr_result = extract_document_info_pure_ocr(
+        ocr_raw_text=ocr_raw_text,
+        ocr_layout_text=ocr_layout_text,
+        heuristic_type=heuristic_hint
+    )
 
-    # Check if Groq client can be initialized
     client = get_groq_client(api_key)
 
-    # If no Groq API Key is available, directly run high-precision Pure OCR extraction
+    # 2. If no Groq API Key is available or if pure OCR successfully extracted key fields, return pure OCR result immediately
     if not client:
-        extracted = extract_document_info_pure_ocr(
-            ocr_raw_text=ocr_raw_text,
-            ocr_layout_text=ocr_layout_text,
-            heuristic_type=heuristic_hint
-        )
-        return extracted, None
+        return pure_ocr_result, None
 
-    # Groq LLM Path
+    # If pure OCR already found key ID numbers (Aadhaar / PAN / DL), return it directly for instant 0ms response
+    doc_type = pure_ocr_result.get("document_type")
+    if doc_type == "aadhaar" and pure_ocr_result.get("aadhaar_number"):
+        return pure_ocr_result, None
+    elif doc_type == "pan" and pure_ocr_result.get("pan_number"):
+        return pure_ocr_result, None
+    elif doc_type == "driving_licence" and pure_ocr_result.get("dl_number"):
+        return pure_ocr_result, None
+
+    # 3. Optional Groq LLM Path for complex layouts when API key is provided
     primary_model = model_name or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
     models_to_try = [primary_model, "llama-3.1-8b-instant", "openai/gpt-oss-120b"]
     models_to_try = list(dict.fromkeys(models_to_try))
@@ -447,7 +451,6 @@ def extract_document_info(
 Analyze the document text, determine if it is Front or Back of Aadhaar, PAN, or Driving Licence, and return structured JSON strictly adhering to the schema.
 """
 
-    last_error = None
     for model in models_to_try:
         try:
             completion = client.chat.completions.create(
@@ -458,7 +461,7 @@ Analyze the document text, determine if it is Front or Back of Aadhaar, PAN, or 
                 ],
                 temperature=temperature,
                 response_format={"type": "json_object"},
-                timeout=12.0
+                timeout=5.0
             )
 
             response_text = completion.choices[0].message.content.strip()
@@ -466,23 +469,16 @@ Analyze the document text, determine if it is Front or Back of Aadhaar, PAN, or 
             try:
                 extracted_json = json.loads(response_text)
                 return extracted_json, None
-            except json.JSONDecodeError as json_err:
+            except json.JSONDecodeError:
                 start_idx = response_text.find("{")
                 end_idx = response_text.rfind("}")
                 if start_idx != -1 and end_idx != -1:
                     clean_json_str = response_text[start_idx : end_idx + 1]
                     extracted_json = json.loads(clean_json_str)
                     return extracted_json, None
-                last_error = f"JSON Parse Error with {model}: {str(json_err)}"
 
         except Exception as e:
-            last_error = f"Error with {model}: {str(e)}"
             continue
 
-    # If LLM failed, fallback to pure OCR rule-based extraction
-    fallback_extracted = extract_document_info_pure_ocr(
-        ocr_raw_text=ocr_raw_text,
-        ocr_layout_text=ocr_layout_text,
-        heuristic_type=heuristic_hint
-    )
-    return fallback_extracted, None
+    # Fallback to pure OCR rule-based result
+    return pure_ocr_result, None
