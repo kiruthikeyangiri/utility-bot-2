@@ -335,6 +335,7 @@ def validate_and_clean_extraction(
         return FinalExtractionResult(
             document_type="aadhaar_back",
             is_valid=True,
+            status="Pending Confirmation",
             short_circuited=False,
             is_duplicate_or_sample=is_duplicate,
             authenticity_status=auth_status,
@@ -343,7 +344,8 @@ def validate_and_clean_extraction(
             ocr_confidence=ocr_confidence,
             raw_ocr_text=raw_ocr_text,
             quality_report=quality_report,
-            images=images or {}
+            images=images or {},
+            portrait_photo=portrait_photo
         )
 
     # 3. PAN FRONT
@@ -542,6 +544,7 @@ def validate_and_clean_extraction(
         return FinalExtractionResult(
             document_type="driving_licence_back",
             is_valid=True,
+            status="Pending Confirmation",
             short_circuited=False,
             is_duplicate_or_sample=is_duplicate,
             authenticity_status=auth_status,
@@ -550,7 +553,8 @@ def validate_and_clean_extraction(
             ocr_confidence=ocr_confidence,
             raw_ocr_text=raw_ocr_text,
             quality_report=quality_report,
-            images=images or {}
+            images=images or {},
+            portrait_photo=portrait_photo
         )
 
     # 7. UNSUPPORTED / NON-ID
