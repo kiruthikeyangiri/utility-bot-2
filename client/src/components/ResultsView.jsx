@@ -327,8 +327,11 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
                   </div>
                 ) : images?.original ? (
                   <div className="relative group">
-                    <img src={`data:image/jpeg;base64,${images.original}`} alt="Document"
-                      className="w-28 h-36 object-cover rounded-lg border-2 border-slate-300 shadow group-hover:shadow-md transition-shadow" />
+                    <img 
+                      src={images.original.startsWith('data:') ? images.original : `data:image/jpeg;base64,${images.original}`} 
+                      alt="Document"
+                      className="w-28 h-36 object-cover rounded-lg border-2 border-slate-300 shadow group-hover:shadow-md transition-shadow" 
+                    />
                     <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-slate-700/80 text-[9px] text-white font-bold">📄 Doc</div>
                   </div>
                 ) : (

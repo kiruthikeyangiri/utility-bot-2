@@ -61,8 +61,8 @@ def resize_image(image: np.ndarray, target_width: int = 1800) -> np.ndarray:
 
 def enhance_contrast(image: np.ndarray, clip_limit: float = 2.0, tile_grid_size: Tuple[int, int] = (8, 8)) -> np.ndarray:
     """
-    Applies CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    to enhance text contrast against backgrounds with gradients or watermarks.
+    Applies gentle CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    to enhance text contrast against backgrounds without wiping out text.
     """
     gray = to_grayscale(image)
     clahe = cv2.createCLAHE(clipLimit=clip_limit, tileGridSize=tile_grid_size)
@@ -71,22 +71,26 @@ def enhance_contrast(image: np.ndarray, clip_limit: float = 2.0, tile_grid_size:
 
 def reduce_glare_and_background(image: np.ndarray) -> np.ndarray:
     """
-    Reduces uneven illumination and glare from laminated ID cards
-    using morphological opening background subtraction.
+    Soft illumination normalization using large kernel background estimation
+    to prevent text erasure on colored cards (e.g. blue PAN cards).
     """
     gray = to_grayscale(image)
-    # Estimate background illumination with large morphological kernel
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 25))
-    background = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
-    # Divide original by background to flatten illumination
+    # Use very large kernel so letters are never treated as background
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (81, 81))
+    background = cv2.morphologyEx(gray, cv2.MORPH_DILATE, kernel)
+    background = cv2.GaussianBlur(background, (51, 51), 0)
+    # Safe division avoiding zero division
+    background = np.maximum(background, 1)
     normalized = cv2.divide(gray, background, scale=255)
-    return normalized
+    # Blend 70% normalized with 30% original for maximum stability
+    blended = cv2.addWeighted(normalized, 0.7, gray, 0.3, 0)
+    return blended
 
 
 def remove_noise(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
     """Applies Bilateral filter to preserve text edges while removing background texture."""
     gray = to_grayscale(image)
-    return cv2.bilateralFilter(gray, d=5, sigmaColor=50, sigmaSpace=50)
+    return cv2.bilateralFilter(gray, d=5, sigmaColor=35, sigmaSpace=35)
 
 
 def apply_threshold(image: np.ndarray, method: str = "otsu") -> np.ndarray:
@@ -96,7 +100,7 @@ def apply_threshold(image: np.ndarray, method: str = "otsu") -> np.ndarray:
     gray = to_grayscale(image)
     if method == "adaptive":
         return cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 19, 9
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 9
         )
     else:  # Otsu's binarization
         _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -106,8 +110,8 @@ def apply_threshold(image: np.ndarray, method: str = "otsu") -> np.ndarray:
 def sharpen_text(image: np.ndarray) -> np.ndarray:
     """Applies unsharp masking to sharpen text characters on low-contrast cards."""
     gray = to_grayscale(image)
-    gaussian = cv2.GaussianBlur(gray, (0, 0), 2.0)
-    unsharp = cv2.addWeighted(gray, 1.6, gaussian, -0.6, 0)
+    gaussian = cv2.GaussianBlur(gray, (0, 0), 1.5)
+    unsharp = cv2.addWeighted(gray, 1.4, gaussian, -0.4, 0)
     return unsharp
 
 
@@ -115,42 +119,42 @@ def preprocess_id_card(
     image: np.ndarray,
     enable_resize: bool = True,
     enable_clahe: bool = True,
-    enable_denoise: bool = True,
-    enable_glare_reduction: bool = True,
+    enable_denoise: bool = False,
+    enable_glare_reduction: bool = False,
     enable_sharpen: bool = True,
     enable_threshold: bool = False,
     threshold_method: str = "otsu"
 ) -> np.ndarray:
     """
     Complete modular preprocessing pipeline for Indian ID Cards.
-    Optimized for laminated cards with background watermarks/holograms.
+    Optimized for RapidOCR deep learning DBNet model.
     """
     processed = image.copy()
 
-    # Step 1: Resize if too small
+    # Step 1: Resize if too small (maintains sharp text resolution)
     if enable_resize:
         processed = resize_image(processed, target_width=1800)
 
-    # Step 2: Convert to Grayscale
+    # Step 2: Grayscale
     processed = to_grayscale(processed)
 
-    # Step 3: Illumination & Glare Flattening
-    if enable_glare_reduction:
-        processed = reduce_glare_and_background(processed)
-
-    # Step 4: Contrast Enhancement (CLAHE)
+    # Step 3: Contrast Enhancement (CLAHE)
     if enable_clahe:
-        processed = enhance_contrast(processed, clip_limit=2.5)
+        processed = enhance_contrast(processed, clip_limit=2.0)
 
-    # Step 5: Unsharp Mask Sharpening
+    # Step 4: Unsharp Mask Sharpening
     if enable_sharpen:
         processed = sharpen_text(processed)
 
-    # Step 6: Noise & Texture Smoothing (Bilateral Filter)
+    # Step 5: Optional gentle Glare reduction
+    if enable_glare_reduction:
+        processed = reduce_glare_and_background(processed)
+
+    # Step 6: Noise smoothing
     if enable_denoise:
         processed = remove_noise(processed)
 
-    # Step 7: Optional Binarization / Thresholding
+    # Step 7: Optional Binarization
     if enable_threshold:
         processed = apply_threshold(processed, method=threshold_method)
 
