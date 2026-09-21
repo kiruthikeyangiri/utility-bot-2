@@ -118,16 +118,26 @@ def sync_record_to_mongodb(collection_name: str, record_id: str, record: dict) -
 
 
 def sync_all_pending_to_mongodb():
-    """Syncs all existing local history and reference records to MongoDB Atlas."""
+    """Syncs all existing local history, failed records, and reference records to MongoDB Atlas."""
     if not MONGODB_URI:
         return 0
     synced = 0
     try:
-        hist = read_history(auto_purge=False)
-        for doc in hist:
-            doc_id = doc.get("_id") or doc.get("sequentialId")
-            if doc_id and sync_record_to_mongodb("verifications", doc_id, doc):
-                synced += 1
+        # 1. Verifications
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                for doc in json.load(f):
+                    doc_id = doc.get("id") or doc.get("sequential_id") or doc.get("_id")
+                    if doc_id and sync_record_to_mongodb("verifications", doc_id, doc):
+                        synced += 1
+
+        # 2. Failed Verifications
+        if os.path.exists(FAILED_HISTORY_FILE):
+            with open(FAILED_HISTORY_FILE, "r", encoding="utf-8") as f:
+                for doc in json.load(f):
+                    doc_id = doc.get("id") or doc.get("sequential_id") or doc.get("_id")
+                    if doc_id and sync_record_to_mongodb("failed_verifications", doc_id, doc):
+                        synced += 1
     except Exception:
         pass
     return synced
