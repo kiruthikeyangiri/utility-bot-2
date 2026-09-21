@@ -217,70 +217,51 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
       )}
 
       {/* ================================================================= */}
-      {/* 1. COMPACT STATUS HEADER — No buttons, just status                */}
+      {/* EXTRACTED DETAILS CARD (Clean, Modern, Full-Width)                */}
       {/* ================================================================= */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-xl shadow-md border border-slate-700/50">
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500 rounded-full blur-3xl translate-x-16 -translate-y-16" />
-        </div>
-        <div className="relative px-5 py-3.5 flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/25">
-              <Fingerprint className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-[13px] font-bold text-white">Audit Confirmation Gateway</h3>
-              <p className="text-[10px] text-slate-400">Review details below, then confirm or reject</p>
-            </div>
+      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden transition-all duration-200">
+        
+        {/* Card Header with Integrated Status Badge */}
+        <div className="px-6 py-4.5 border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-slate-50/40 to-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div>{getBadge()}</div>
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+              {document_type === 'unsupported' 
+                ? 'Verification Declined' 
+                : `${document_type.replace(/_/g, ' ').toUpperCase()} Details`}
+            </h2>
           </div>
 
-          {confirmedId ? (
-            <div className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-[11px] font-mono font-bold tracking-wider ${
-              confirmationStatus === 'Success' 
-                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' 
-                : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-            }`}>
-              {confirmationStatus === 'Success' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-              <span>{confirmedId}</span>
-            </div>
-          ) : (
-            <div className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/25 text-[11px] font-bold">
-              <Clock className="w-3 h-3 animate-pulse" />
-              <span>Pending</span>
-            </div>
-          )}
-        </div>
-      </div>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {confirmedId ? (
+              <div className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold tracking-wider ${
+                confirmationStatus === 'Success' 
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm' 
+                  : 'bg-rose-50 text-rose-700 border border-rose-200 shadow-sm'
+              }`}>
+                {confirmationStatus === 'Success' ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <XCircle className="w-3.5 h-3.5 text-rose-600" />}
+                <span>{confirmedId}</span>
+              </div>
+            ) : (
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold shadow-sm">
+                <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                <span>Pending Confirmation</span>
+              </div>
+            )}
 
-      {/* ================================================================= */}
-      {/* 2. EXTRACTED DETAILS CARD                                          */}
-      {/* ================================================================= */}
-      <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">
-        
-        {/* Card Header */}
-        <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50/80 to-white">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <div className="mb-1.5">{getBadge()}</div>
-              <h2 className="text-base font-bold text-slate-900 tracking-tight">
-                {document_type === 'unsupported' 
-                  ? 'Verification Declined' 
-                  : `${document_type.replace(/_/g, ' ').toUpperCase()} — Extracted Details`}
-              </h2>
-            </div>
-            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-600 text-[10px] font-semibold self-start sm:self-auto">
-              <Lock className="w-2.5 h-2.5" />
+            <div className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-semibold">
+              <Lock className="w-3 h-3 text-slate-500" />
               <span>30-Day Retention</span>
             </div>
           </div>
         </div>
 
         {/* Card Body */}
-        <div className="p-5 space-y-4">
+        <div className="p-6 space-y-5">
 
           {/* SECURITY ALERT */}
           {(is_duplicate_or_sample || authenticity_status === "DUPLICATE_COPY") && (
-            <div className="p-3.5 bg-rose-50 border border-rose-300 rounded-xl flex items-start space-x-2.5 text-xs text-rose-900">
+            <div className="p-4 bg-rose-50 border border-rose-300 rounded-xl flex items-start space-x-3 text-xs text-rose-900 shadow-sm">
               <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
               <div>
                 <strong className="block text-xs font-bold text-rose-950 mb-0.5">⚠️ Duplicate / Sample Detected</strong>
@@ -293,60 +274,60 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
 
           {/* PAN BACK GUIDANCE */}
           {document_type === 'pan_back' && (
-            <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 space-y-2">
+            <div className="p-5 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 space-y-2.5">
               <div className="flex items-center space-x-2 font-bold text-xs">
-                <RotateCcw className="w-3.5 h-3.5 text-amber-700" />
+                <RotateCcw className="w-4 h-4 text-amber-700" />
                 <span>PAN Back Side — Upload Front Side</span>
               </div>
-              <p className="text-[11px] text-amber-800">
+              <p className="text-xs text-amber-800">
                 Personal details are on the <strong>FRONT side</strong>.
               </p>
               <button onClick={onUploadAnother}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold transition cursor-pointer">
+                className="inline-flex items-center space-x-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-sm">
                 <span>Upload Front</span>
-                <ArrowRight className="w-3 h-3" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
 
           {/* PORTRAIT + FIELDS GRID */}
           {document_type !== 'unsupported' && document_type !== 'pan_back' && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
-              {/* LEFT: Portrait Photo */}
-              <div className="md:col-span-1 flex flex-col items-center justify-start p-4 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2.5">
+              {/* LEFT: Portrait Photo (Spans 3 cols on lg, 2 on xl) */}
+              <div className="lg:col-span-4 xl:col-span-3 flex flex-col items-center justify-start p-5 bg-slate-50/80 border border-slate-200/90 rounded-2xl space-y-3 shadow-inner">
                 <div className="w-full flex items-center justify-between text-slate-500">
-                  <span className="text-[10px] font-bold uppercase tracking-wider">Photo ID</span>
-                  <ImageIcon className="w-3 h-3 text-slate-400" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Photo ID / Scan</span>
+                  <ImageIcon className="w-3.5 h-3.5 text-slate-400" />
                 </div>
                 {portrait_photo ? (
                   <div className="relative group">
                     <img src={portrait_photo} alt="Portrait"
-                      className="w-28 h-36 object-cover rounded-lg border-2 border-indigo-200 shadow group-hover:shadow-md transition-shadow" />
-                    <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-emerald-600/90 text-[9px] text-white font-bold">✓ Face</div>
+                      className="w-32 h-40 object-cover rounded-xl border-2 border-indigo-200 shadow-md group-hover:shadow-lg transition-shadow" />
+                    <div className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded bg-emerald-600/90 text-[10px] text-white font-bold shadow">✓ Face</div>
                   </div>
                 ) : images?.original ? (
                   <div className="relative group">
                     <img 
                       src={images.original.startsWith('data:') ? images.original : `data:image/jpeg;base64,${images.original}`} 
                       alt="Document"
-                      className="w-28 h-36 object-cover rounded-lg border-2 border-slate-300 shadow group-hover:shadow-md transition-shadow" 
+                      className="w-32 h-40 object-cover rounded-xl border-2 border-slate-300 shadow-md group-hover:shadow-lg transition-shadow" 
                     />
-                    <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-slate-700/80 text-[9px] text-white font-bold">📄 Doc</div>
+                    <div className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded bg-slate-700/90 text-[10px] text-white font-bold shadow">📄 Doc</div>
                   </div>
                 ) : (
-                  <div className="w-28 h-36 bg-slate-200/80 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 p-2 text-center">
-                    <User className="w-7 h-7 mb-1 opacity-50" />
-                    <span className="text-[9px] font-medium">No Image</span>
+                  <div className="w-32 h-40 bg-slate-200/80 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 p-2 text-center">
+                    <User className="w-8 h-8 mb-1 opacity-50" />
+                    <span className="text-[10px] font-medium">No Image</span>
                   </div>
                 )}
-                <div className="text-[10px] text-center text-slate-500 font-medium">
+                <div className="text-[11px] text-center text-slate-600 font-medium">
                   {document_type === 'aadhaar' ? 'Biometric Photo' : document_type.includes('back') ? 'Document Scan' : 'Cardholder ID'}
                 </div>
               </div>
 
-              {/* RIGHT: Editable Fields */}
-              <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* RIGHT: Editable Fields (Spans 8 cols on lg, 9 on xl) */}
+              <div className="lg:col-span-8 xl:col-span-9 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-2 gap-3.5">
                 
                 {document_type === 'aadhaar' && (
                   <>

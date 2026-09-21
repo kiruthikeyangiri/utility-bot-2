@@ -4,7 +4,7 @@ import { Bot, History, Clock, HardDrive } from 'lucide-react';
 export default function Navbar({ onToggleHistory, isConnected }) {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-[1700px] w-full mx-auto px-4 sm:px-8 lg:px-12 h-16 flex items-center justify-between">
         
         {/* Brand Logo & Title */}
         <div className="flex items-center space-x-3">

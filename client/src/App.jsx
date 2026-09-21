@@ -98,13 +98,13 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-8 lg:px-12 py-8 space-y-6">
         
         {/* Upload & Settings Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           
-          {/* Upload Zone (2 Columns) */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Upload Zone (Takes 2 columns on lg, 3 on xl) */}
+          <div className="lg:col-span-2 xl:col-span-3 space-y-4">
             <UploadZone
               onFileSelected={(file) => {
                 setSelectedFile(file);
@@ -121,7 +121,7 @@ export default function App() {
               <button
                 onClick={handleExtract}
                 disabled={isLoading}
-                className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-sm shadow-md shadow-sky-600/20 transition flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-sm shadow-md shadow-sky-600/20 transition flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {isLoading ? (
                   <>
@@ -140,7 +140,7 @@ export default function App() {
           </div>
 
           {/* Engine Settings (1 Column) */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 xl:col-span-1">
             <SettingsPanel
               settings={settings}
               onChange={setSettings}
