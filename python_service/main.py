@@ -360,6 +360,9 @@ def extract_document(
     # 6. DECISION GATE: Heuristic Type Check (Pre-LLM Resource Gate)
     heuristic_type, heuristic_conf, heuristic_scores = classify_document_heuristics(ocr_result.raw_text)
     
+    # 6.1 Portrait Face Crop Extraction (Aware of Doc Type: Right side for DL/Aadhaar, Left side for PAN)
+    portrait_photo = extract_portrait_photo(cv2_orig, doc_type_hint=heuristic_type)
+
     # If the document shows NO resemblance to Aadhaar, PAN, or DL, short-circuit immediately
     if heuristic_type == "unsupported" and max(heuristic_scores.values()) == 0:
         logger.info("[Decision Gate] Document rejected before LLM call. Zero ID keywords found.")
@@ -378,7 +381,7 @@ def extract_document(
             raw_ocr_text=ocr_result.raw_text,
             quality_report=quality_report,
             images=pipeline_images,
-            portrait_photo=portrait_photo
+            portrait_photo=None
         )
         return res
 
@@ -393,8 +396,16 @@ def extract_document(
         heuristic_hint=heuristic_hint_str
     )
 
+    detected_doc_type = raw_llm_json.get("document_type") or heuristic_type
     if raw_llm_json.get("document_type") == "unsupported" and heuristic_type != "unsupported":
         raw_llm_json["document_type"] = heuristic_type
+        detected_doc_type = heuristic_type
+
+    # Re-evaluate portrait photo if doc type was refined or back side detected
+    if detected_doc_type in ["aadhaar_back", "pan_back", "driving_licence_back", "unsupported"]:
+        portrait_photo = None
+    elif not portrait_photo:
+        portrait_photo = extract_portrait_photo(cv2_orig, doc_type_hint=detected_doc_type)
 
     # 8. Post-Validation and Pydantic Normalization
     final_result = validate_and_clean_extraction(

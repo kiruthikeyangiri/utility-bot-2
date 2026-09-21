@@ -296,13 +296,13 @@ def extract_document_info_pure_ocr(
     # ==================== DRIVING LICENCE FRONT ====================
     elif doc_type == "driving_licence":
         dl_num = None
-        m_dl = re.search(r"(?:DL\s*NO\.?|Licence\s*No\.?)\s*[:\s]*([A-Z0-9\-\s\/]+)", text, re.I)
+        m_dl = re.search(r"(?:DL\s*NO\.?|Licence\s*No\.?)\s*[:\s]*([A-Z]{2}[0-9A-Z\-\/\s]{6,20})(?:\n|$|\r)", text, re.I)
         if m_dl:
-            dl_num = m_dl.group(1).strip()
+            dl_num = re.sub(r"\s+", " ", m_dl.group(1)).strip()
         else:
             m_dl_regex = re.search(r"\b([A-Z]{2}[-\s]?[0-9]{2}[-\s]?[0-9]{4,14})\b", text, re.I)
             if m_dl_regex:
-                dl_num = m_dl_regex.group(1)
+                dl_num = m_dl_regex.group(1).strip()
 
         dob = None
         m_dob = re.search(r"(?:DOB|Date of Birth)\s*[:\s]*(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4})", text, re.I)
@@ -323,27 +323,50 @@ def extract_document_info_pure_ocr(
                         valid_until = d
                         break
 
+        # DL Name Extraction (Filtered from 'Holder's Signature', 'Date of Issue', etc.)
         name = None
+        dl_junk_words = [
+            "holder's signature", "holders signature", "signature", "date of issue", 
+            "date of first issue", "dateof irstissue", "issue date", "validity", 
+            "valid till", "authorisation", "driving licence", "driving license", 
+            "union of india", "government", "transport department", "licensing authority", 
+            "form 7", "form 8", "blood group", "son of", "daughter of", "wife of", 
+            "s/o", "d/o", "w/o", "cov", "lmv", "mcwg", "nt", "tr"
+        ]
+
         for i, line in enumerate(lines):
             line_clean = line.strip()
-            if re.search(r"^Name\s*[:\s]*", line_clean, re.I):
-                cand = re.sub(r"^Name\s*[:\s]*", "", line_clean, flags=re.I).strip()
-                if cand and len(cand) > 2:
-                    name = re.sub(r"[^a-zA-Z\s\.]", "", cand).strip()
-                    break
-            elif re.search(r"name|holder", line_clean.lower()) and i + 1 < len(lines):
-                candidate = re.sub(r"[^a-zA-Z\s\.]", "", lines[i+1]).strip()
-                if candidate and len(candidate) > 2 and not any(k in candidate.lower() for k in ["dob", "date", "birth", "licence", "union"]):
-                    name = candidate
+            line_lower = line_clean.lower()
+            
+            # Explicit 'Name:' or 'Holder's Name:' pattern
+            m_name_lbl = re.search(r"(?:Holder'?s?\s*Name|Name)\s*[:\s]+([A-Za-z\s\.]+)", line_clean, re.I)
+            if m_name_lbl:
+                cand = m_name_lbl.group(1).strip()
+                cand_clean = re.sub(r"[^a-zA-Z\s\.]", "", cand).strip()
+                if cand_clean and len(cand_clean) > 2 and not any(j in cand_clean.lower() for j in dl_junk_words):
+                    name = cand_clean
                     break
 
+            # If label is on its own line (e.g., 'Name' or 'Holder Name') and next line has the value
+            if re.match(r"^(?:Holder'?s?\s*Name|Name)$", line_clean, re.I) and i + 1 < len(lines):
+                cand_next = re.sub(r"[^a-zA-Z\s\.]", "", lines[i + 1]).strip()
+                if cand_next and len(cand_next) > 2 and not any(j in cand_next.lower() for j in dl_junk_words):
+                    name = cand_next
+                    break
+
+        # Fallback 1: Scan for uppercase name patterns excluding junk
         if not name:
             for line in lines:
                 clean_line = re.sub(r"[^a-zA-Z\s\.]", "", line).strip()
-                if clean_line.isupper() and len(clean_line.split()) >= 2 and len(clean_line) > 3:
-                    if not any(k in clean_line.lower() for k in ["indian", "union", "driving", "licence", "license", "government", "transport", "department", "validity", "issue", "son", "daughter", "wife"]):
-                        name = clean_line
-                        break
+                clean_lower = clean_line.lower()
+                if not any(j in clean_lower for j in dl_junk_words) and not re.search(r"\d", line):
+                    # Check for 2-4 word uppercase name or initial format (e.g. KIRUTHIKEYAN S, RAMESH K)
+                    words = clean_line.split()
+                    if 1 <= len(words) <= 4 and len(clean_line) >= 3:
+                        if clean_line.isupper() or all(w[0].isupper() for w in words if w):
+                            if not any(k in clean_lower for k in ["india", "state", "card", "valid", "rto", "dept"]):
+                                name = clean_line
+                                break
 
         address = None
         m_addr = re.search(r"Address\s*[:\s]*([^\n]+)", text, re.I)
