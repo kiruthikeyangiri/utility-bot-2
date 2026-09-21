@@ -306,7 +306,7 @@ def extract_document_info_pure_ocr(
 
         # 1. DOB Extraction
         dob = None
-        m_dob = re.search(r"(?:DOB|Date\s*of\s*Birth|DateofBirth)\s*[:;\-\s]*(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4})", text, re.I)
+        m_dob = re.search(r"(?:DOB|D0B|Date\s*of\s*Birth|DateofBirth|D\.O\.B)\s*[:;\-\s]*(\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4})", text, re.I)
         if m_dob:
             dob = m_dob.group(1)
 

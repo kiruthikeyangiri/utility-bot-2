@@ -165,9 +165,9 @@ def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = Non
     """
     Detects and cleanly extracts ONLY the applicant's person portrait (headshot).
     - If doc_type is a back side (aadhaar_back, pan_back, etc.), returns None immediately.
-    - For Driving Licence (DL): Extracts the RIGHT photo box (Y: 16%-49%, X: 63%-80%) avoiding the left smart chip.
-    - For Aadhaar Front: Extracts the RIGHT photo box (Y: 15%-66%, X: 60%-92%).
-    - For PAN Front: Extracts the LEFT photo box (Y: 16%-66%, X: 6%-40%).
+    - For Driving Licences (DL) & Aadhaar: Dynamically locates the face in the RIGHT photo zone (X: 52%-98%, Y: 10%-75%).
+    - For PAN Cards: Dynamically locates the face in the LEFT photo zone (X: 5%-45%, Y: 12%-72%).
+    - Rejects metallic microchips, seals, and text borders.
     - Returns base64 data URI of the cropped headshot, or None if no valid photo is found.
     """
     if image is None or image.size == 0:
@@ -185,38 +185,65 @@ def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = Non
 
         doc_hint = (doc_type_hint or "").lower()
 
-        # 1. Target candidate bounding region based on document specification
-        if doc_hint in ["driving_licence", "dl"]:
-            # Driving Licence standard: Photo is strictly on the RIGHT side
-            sub = image[int(h * 0.165):int(h * 0.49), int(w * 0.635):int(w * 0.795)]
-        elif doc_hint in ["aadhaar", "aadhaar_front"]:
-            # Aadhaar Front standard: Photo is strictly on the RIGHT side
-            sub = image[int(h * 0.15):int(h * 0.66), int(w * 0.60):int(w * 0.92)]
-        elif doc_hint in ["pan", "pan_front"]:
-            # PAN Card standard: Photo is strictly on the LEFT side
-            sub = image[int(h * 0.16):int(h * 0.66), int(w * 0.06):int(w * 0.40)]
+        # 1. Determine primary search window based on document specifications
+        if doc_hint in ["pan", "pan_front"]:
+            # PAN Card: Photo is strictly on the LEFT side
+            search_region = image[int(h * 0.12):int(h * 0.72), int(w * 0.05):int(w * 0.45)]
         else:
-            # General fallback: check right region first (DL / Aadhaar)
-            sub = image[int(h * 0.16):int(h * 0.50), int(w * 0.62):int(w * 0.82)]
+            # DL and Aadhaar: Photo is strictly on the RIGHT side (avoids left EMV chip completely)
+            search_region = image[int(h * 0.10):int(h * 0.75), int(w * 0.52):int(w * 0.98)]
 
-        if sub.size == 0 or sub.shape[0] < 30 or sub.shape[1] < 30:
+        if search_region.size == 0 or search_region.shape[0] < 30 or search_region.shape[1] < 30:
             return None
 
-        # 2. Check for skin tones to confirm a person's photo is present
-        ycrcb = cv2.cvtColor(sub, cv2.COLOR_BGR2YCrCb)
+        # 2. Skin Segmentation using YCrCb color space
+        ycrcb = cv2.cvtColor(search_region, cv2.COLOR_BGR2YCrCb)
         cr = ycrcb[:, :, 1]
         cb = ycrcb[:, :, 2]
-        skin_mask = (cr >= 125) & (cr <= 180) & (cb >= 75) & (cb <= 135)
-        skin_ratio = np.sum(skin_mask) / float(sub.shape[0] * sub.shape[1])
+        skin_mask = (cr >= 128) & (cr <= 178) & (cb >= 78) & (cb <= 132)
 
-        # If low skin ratio, verify image variance (e.g. grayscale / dark photo)
-        if skin_ratio < 0.03:
-            gray = cv2.cvtColor(sub, cv2.COLOR_BGR2GRAY)
-            if np.std(gray) < 16:
+        # Morphological filtering to group facial skin pixels
+        mask_u8 = (skin_mask * 255).astype(np.uint8)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel)
+        contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        valid_face_contours = []
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area > 350:
+                fx, fy, fw, fh = cv2.boundingRect(c)
+                aspect = fh / float(fw) if fw > 0 else 0
+                if 0.60 <= aspect <= 2.6:
+                    valid_face_contours.append((area, c, fx, fy, fw, fh))
+
+        if not valid_face_contours:
+            # Fallback to checking skin ratio in candidate region
+            skin_ratio = np.sum(skin_mask) / float(search_region.shape[0] * search_region.shape[1])
+            if skin_ratio < 0.04:
                 return None
+            face_crop = search_region
+        else:
+            # Take the largest face contour
+            valid_face_contours.sort(key=lambda x: x[0], reverse=True)
+            _, best_c, fx, fy, fw, fh = valid_face_contours[0]
 
-        # 3. Clean and return 150x180 thumbnail
-        thumb = cv2.resize(sub, (150, 180), interpolation=cv2.INTER_AREA)
+            pad_top = int(fh * 0.25)
+            pad_bot = int(fh * 0.20)
+            pad_x = int(fw * 0.15)
+
+            crop_top = max(0, fy - pad_top)
+            crop_bot = min(search_region.shape[0], fy + fh + pad_bot)
+            crop_left = max(0, fx - pad_x)
+            crop_right = min(search_region.shape[1], fx + fw + pad_x)
+
+            face_crop = search_region[crop_top:crop_bot, crop_left:crop_right]
+
+        if face_crop.shape[0] < 25 or face_crop.shape[1] < 25:
+            return None
+
+        # 3. Clean and return standard 150x180 thumbnail
+        thumb = cv2.resize(face_crop, (150, 180), interpolation=cv2.INTER_AREA)
         _, buffer = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
         return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
     except Exception:
