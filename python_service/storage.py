@@ -71,19 +71,66 @@ def _atlas_request(action: str, collection: str, body: dict) -> dict:
     except Exception as err:
         raise RuntimeError(f"Atlas Data API error: {err}") from err
 
-# Check Atlas Data API availability at startup
-if MONGODB_APP_ID and MONGODB_DATA_API_KEY:
+def get_mongo_client():
+    """Returns a MongoClient with certifi SSL if MONGODB_URI is provided."""
+    if not MONGODB_URI:
+        return None
     try:
-        result = _atlas_request("find", "verifications", {"limit": 1, "filter": {}})
-        IS_MONGO_ONLINE = True
-        print("[Utility Bot Storage] MongoDB Atlas Data API connection verified! Cloud sync active.")
-    except Exception as _e:
-        IS_MONGO_ONLINE = False
-        print(f"[Utility Bot Storage] MongoDB Atlas Data API unavailable: {_e}. Using local JSON storage.")
-else:
-    IS_MONGO_ONLINE = False
+        import pymongo
+        import certifi
+        return pymongo.MongoClient(
+            MONGODB_URI,
+            tlsCAFile=certifi.where(),
+            serverSelectionTimeoutMS=3000
+        )
+    except Exception:
+        return None
+
+
+def sync_record_to_mongodb(collection_name: str, record_id: str, record: dict) -> bool:
+    """Syncs a record to MongoDB Atlas using native pymongo (or Data API fallback)."""
+    # 1. Try native pymongo
     if MONGODB_URI:
-        print("[Utility Bot Storage] MONGODB_DATA_API_KEY / MONGODB_APP_ID not set — using local JSON storage. See .env setup.")
+        try:
+            client = get_mongo_client()
+            if client:
+                db = client[MONGODB_DB_NAME]
+                db[collection_name].replace_one({"_id": record_id}, record, upsert=True)
+                print(f"[Storage] Synced {record_id} to MongoDB Atlas '{collection_name}' successfully!")
+                return True
+        except Exception as e:
+            pass
+
+    # 2. Try Atlas Data API
+    if IS_MONGO_ONLINE:
+        try:
+            _atlas_request("replaceOne", collection_name, {
+                "filter": {"_id": record_id},
+                "replacement": record,
+                "upsert": True
+            })
+            print(f"[Storage] Synced {record_id} to MongoDB Atlas '{collection_name}' via Data API!")
+            return True
+        except Exception as e:
+            pass
+
+    return False
+
+
+def sync_all_pending_to_mongodb():
+    """Syncs all existing local history and reference records to MongoDB Atlas."""
+    if not MONGODB_URI:
+        return 0
+    synced = 0
+    try:
+        hist = read_history(auto_purge=False)
+        for doc in hist:
+            doc_id = doc.get("_id") or doc.get("sequentialId")
+            if doc_id and sync_record_to_mongodb("verifications", doc_id, doc):
+                synced += 1
+    except Exception:
+        pass
+    return synced
 
 
 def get_next_sequence_id(prefix: str = "IMG") -> str:
@@ -245,17 +292,8 @@ def save_confirmed_verification(
         records = records[:500]
     write_file_records(target_file, records)
 
-    # 2. Sync to MongoDB Atlas via Data API (HTTPS) if live
-    if IS_MONGO_ONLINE:
-        try:
-            _atlas_request("replaceOne", target_collection_name, {
-                "filter": {"_id": seq_id},
-                "replacement": record,
-                "upsert": True
-            })
-            print(f"[Utility Bot Storage] Synced {seq_id} ({status}) to MongoDB Atlas '{target_collection_name}' via Data API!")
-        except Exception as err:
-            print(f"[Utility Bot Storage] MongoDB sync notice (local backup preserved): {err}")
+    # 2. Sync to MongoDB Atlas (Native PyMongo or Data API)
+    sync_record_to_mongodb(target_collection_name, seq_id, record)
 
     return {
         "id": seq_id,
