@@ -97,56 +97,43 @@ export default function App() {
         isConnected={isDbConnected}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto px-4 sm:px-8 lg:px-12 py-8 space-y-6">
+      {/* Main Content Area — Clean & Centered (Matching Sketch) */}
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6 flex flex-col justify-center">
         
-        {/* Upload & Settings Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          
-          {/* Upload Zone (Takes 2 columns on lg, 3 on xl) */}
-          <div className="lg:col-span-2 xl:col-span-3 space-y-4">
-            <UploadZone
-              onFileSelected={(file) => {
-                setSelectedFile(file);
-                setExtractionResult(null);
-                setErrorMessage(null);
-              }}
-              selectedFile={selectedFile}
-              onClear={handleClear}
-              isLoading={isLoading}
-            />
+        {/* Upload Zone (Centered Single Card) */}
+        <div className="w-full space-y-4">
+          <UploadZone
+            onFileSelected={(file) => {
+              setSelectedFile(file);
+              setExtractionResult(null);
+              setErrorMessage(null);
+            }}
+            selectedFile={selectedFile}
+            onClear={handleClear}
+            isLoading={isLoading}
+          />
 
-            {/* Run Extraction Button */}
-            {selectedFile && (
-              <button
-                onClick={handleExtract}
-                disabled={isLoading}
-                className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 text-white font-bold text-sm shadow-md shadow-sky-600/20 transition flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Processing Document (OpenCV Enhancement → OCR Detection → Extraction)...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-5 h-5" />
-                    <span>Extract Document Information</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-
-          {/* Engine Settings (1 Column) */}
-          <div className="lg:col-span-1 xl:col-span-1">
-            <SettingsPanel
-              settings={settings}
-              onChange={setSettings}
-            />
-          </div>
-
+          {/* Run Extraction Button (Appears when image is uploaded) */}
+          {selectedFile && !extractionResult && (
+            <button
+              onClick={handleExtract}
+              disabled={isLoading}
+              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-sky-600 via-indigo-600 to-indigo-700 hover:from-sky-500 hover:to-indigo-600 text-white font-bold text-base shadow-lg shadow-indigo-600/25 transition-all duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processing Document (OpenCV Enhancement → RapidOCR Detection)...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  <span>Extract Document Information</span>
+                  <ArrowRight className="w-5 h-5" />
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {/* Error Alert Box */}
