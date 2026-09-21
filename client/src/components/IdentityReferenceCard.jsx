@@ -90,7 +90,7 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
       {/* ================================================================= */}
       {/* 1. PHYSICAL / DIGITAL IDENTITY REFERENCE CARD (LIGHT THEME)        */}
       {/* ================================================================= */}
-      <div className="max-w-xl mx-auto bg-white text-slate-900 rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/60 border border-slate-200/90 relative overflow-hidden transition-all">
+      <div id="printable-reference-card" className="max-w-xl mx-auto bg-white text-slate-900 rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/60 border border-slate-200/90 relative overflow-hidden transition-all">
         
         {/* Subtle background ambient gradients */}
         <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-indigo-50/60 to-transparent rounded-full blur-3xl pointer-events-none" />
@@ -227,7 +227,7 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
       {/* ================================================================= */}
       {/* 2. CARD ACTION CONTROLS                                           */}
       {/* ================================================================= */}
-      <div className="max-w-xl mx-auto flex flex-wrap items-center justify-center gap-3 pt-2">
+      <div className="max-w-xl mx-auto flex flex-wrap items-center justify-center gap-3 pt-2 no-print print:hidden">
         
         {/* Verify QR / Preview Verification Button */}
         <button

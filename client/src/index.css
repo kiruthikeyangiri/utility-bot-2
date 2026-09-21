@@ -31,3 +31,59 @@ code, pre {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ========================================================================== */
+/* PRINT MEDIA STYLES: ONLY PRINT THE IDENTITY REFERENCE CARD                 */
+/* ========================================================================== */
+@media print {
+  /* Hide all header, nav, uploads, buttons, background elements by default */
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Make ONLY the printable reference card and its contents visible */
+  #printable-reference-card,
+  #printable-reference-card * {
+    visibility: visible !important;
+  }
+
+  #printable-reference-card {
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 100% !important;
+    max-width: 580px !important;
+    margin: 0 auto !important;
+    padding: 28px !important;
+    border: 1.5px solid #cbd5e1 !important;
+    border-radius: 24px !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Force hide buttons, modals, and extraneous elements */
+  .no-print,
+  .print\\:hidden,
+  button,
+  nav,
+  header {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+}
