@@ -163,12 +163,12 @@ def preprocess_id_card(
 
 def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = None) -> Optional[str]:
     """
-    Detects and tightly extracts ONLY the applicant's person portrait (headshot).
+    Detects and cleanly extracts ONLY the applicant's person portrait (headshot).
     - If doc_type is a back side (aadhaar_back, pan_back, etc.), returns None immediately.
-    - For Driving Licence and Aadhaar Front: prioritizes the RIGHT side (X: 55% to 95%, Y: 12% to 78%).
-    - For PAN Front: prioritizes the LEFT side (X: 5% to 45%, Y: 14% to 72%).
-    - Accurately rejects golden EMV smart chips, Ashoka emblem, holographic seals, and non-face regions.
-    - Returns base64 data URI of the cropped headshot, or None if no genuine human face is found.
+    - For Driving Licence (DL): Extracts the RIGHT photo box (Y: 16%-49%, X: 63%-80%) avoiding the left smart chip.
+    - For Aadhaar Front: Extracts the RIGHT photo box (Y: 15%-66%, X: 60%-92%).
+    - For PAN Front: Extracts the LEFT photo box (Y: 16%-66%, X: 6%-40%).
+    - Returns base64 data URI of the cropped headshot, or None if no valid photo is found.
     """
     if image is None or image.size == 0:
         return None
@@ -183,111 +183,40 @@ def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = Non
         if h < 50 or w < 50:
             return None
 
-        # Candidate regions:
-        # Region Right: Standard Aadhaar Front & Modern Indian Driving Licence (Sarathi / Parivahan)
-        region_right = (int(h * 0.10), int(h * 0.80), int(w * 0.52), int(w * 0.96), "right")
-        # Region Left: Standard PAN Card Front & Older Driving Licences
-        region_left = (int(h * 0.12), int(h * 0.72), int(w * 0.05), int(w * 0.45), "left")
-
         doc_hint = (doc_type_hint or "").lower()
-        if doc_hint in ["driving_licence", "aadhaar", "aadhaar_front", "dl"]:
-            candidates = [region_right, region_left]
+
+        # 1. Target candidate bounding region based on document specification
+        if doc_hint in ["driving_licence", "dl"]:
+            # Driving Licence standard: Photo is strictly on the RIGHT side
+            sub = image[int(h * 0.165):int(h * 0.49), int(w * 0.635):int(w * 0.795)]
+        elif doc_hint in ["aadhaar", "aadhaar_front"]:
+            # Aadhaar Front standard: Photo is strictly on the RIGHT side
+            sub = image[int(h * 0.15):int(h * 0.66), int(w * 0.60):int(w * 0.92)]
         elif doc_hint in ["pan", "pan_front"]:
-            candidates = [region_left, region_right]
+            # PAN Card standard: Photo is strictly on the LEFT side
+            sub = image[int(h * 0.16):int(h * 0.66), int(w * 0.06):int(w * 0.40)]
         else:
-            candidates = [region_right, region_left]
+            # General fallback: check right region first (DL / Aadhaar)
+            sub = image[int(h * 0.16):int(h * 0.50), int(w * 0.62):int(w * 0.82)]
 
-        best_crop = None
-        best_score = 0.0
-
-        for y1, y2, x1, x2, side in candidates:
-            sub = image[y1:y2, x1:x2]
-            if sub.size == 0 or sub.shape[0] < 35 or sub.shape[1] < 35:
-                continue
-
-            # Convert color spaces
-            hsv = cv2.cvtColor(sub, cv2.COLOR_BGR2HSV)
-            ycrcb = cv2.cvtColor(sub, cv2.COLOR_BGR2YCrCb)
-
-            # 1. Smart Chip Rejection (Gold / Metallic contact pads on Left side of DL)
-            # Gold color profile: Hue 15-38, High Saturation > 100, High Brightness > 90
-            gold_mask = (hsv[:, :, 0] >= 15) & (hsv[:, :, 0] <= 38) & (hsv[:, :, 1] >= 100) & (hsv[:, :, 2] >= 90)
-            gold_ratio = np.sum(gold_mask) / float(sub.shape[0] * sub.shape[1])
-            if side == "left" and gold_ratio > 0.15:
-                # This candidate region contains the metallic EMV smart chip, not a human headshot
-                continue
-
-            # 2. Human Skin Segmentation (Combined YCrCb and HSV filters)
-            cr = ycrcb[:, :, 1]
-            cb = ycrcb[:, :, 2]
-            h_chan = hsv[:, :, 0]
-            s_chan = hsv[:, :, 1]
-            v_chan = hsv[:, :, 2]
-
-            skin_mask_ycrcb = (cr >= 130) & (cr <= 175) & (cb >= 80) & (cb <= 130)
-            skin_mask_hsv = ((h_chan <= 28) | (h_chan >= 168)) & (s_chan >= 20) & (s_chan <= 180) & (v_chan >= 35) & (v_chan <= 250)
-            skin_mask = skin_mask_ycrcb & skin_mask_hsv
-
-            skin_pixels = np.sum(skin_mask)
-            total_pixels = sub.shape[0] * sub.shape[1]
-            skin_ratio = skin_pixels / float(total_pixels) if total_pixels > 0 else 0
-
-            # Real photo regions typically have between 6% and 75% skin pixels
-            if skin_ratio < 0.05 or skin_ratio > 0.85:
-                continue
-
-            # Morphological cleaning to find connected face cluster
-            mask_u8 = (skin_mask * 255).astype(np.uint8)
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-            mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel)
-            contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            if not contours:
-                continue
-
-            # Find largest skin contour (head / face)
-            c = max(contours, key=cv2.contourArea)
-            c_area = cv2.contourArea(c)
-            if c_area < (sub.shape[0] * sub.shape[1] * 0.04):
-                # Too small to be a person's face
-                continue
-
-            fx, fy, fw, fh = cv2.boundingRect(c)
-
-            # Verify aspect ratio of the face candidate (0.75 <= h/w <= 2.2)
-            aspect_ratio = fh / float(fw) if fw > 0 else 0
-            if aspect_ratio < 0.65 or aspect_ratio > 2.4:
-                continue
-
-            # Expand bounding box for complete headshot (hair, forehead, chin, shoulders)
-            pad_y_top = int(fh * 0.40)
-            pad_y_bot = int(fh * 0.35)
-            pad_x = int(fw * 0.32)
-
-            crop_top = max(0, fy - pad_y_top)
-            crop_bot = min(sub.shape[0], fy + fh + pad_y_bot)
-            crop_left = max(0, fx - pad_x)
-            crop_right = min(sub.shape[1], fx + fw + pad_x)
-
-            candidate_crop = sub[crop_top:crop_bot, crop_left:crop_right]
-            if candidate_crop.shape[0] >= 35 and candidate_crop.shape[1] >= 30:
-                # Score formula: area + skin_ratio bonus + priority bonus for primary side
-                side_bonus = 1.2 if (side == "right" and doc_hint in ["driving_licence", "aadhaar", "aadhaar_front"]) or (side == "left" and doc_hint in ["pan", "pan_front"]) else 1.0
-                score = (c_area * skin_ratio) * side_bonus
-
-                if score > best_score:
-                    best_crop = candidate_crop
-                    best_score = score
-                    # If this is the primary region for the hinted doc type, take it
-                    if side_bonus > 1.0 and skin_ratio > 0.08:
-                        break
-
-        # If no valid person face detected on the document, return None (never return full card)
-        if best_crop is None:
+        if sub.size == 0 or sub.shape[0] < 30 or sub.shape[1] < 30:
             return None
 
-        # Clean thumbnail output
-        thumb = cv2.resize(best_crop, (150, 180), interpolation=cv2.INTER_AREA)
+        # 2. Check for skin tones to confirm a person's photo is present
+        ycrcb = cv2.cvtColor(sub, cv2.COLOR_BGR2YCrCb)
+        cr = ycrcb[:, :, 1]
+        cb = ycrcb[:, :, 2]
+        skin_mask = (cr >= 125) & (cr <= 180) & (cb >= 75) & (cb <= 135)
+        skin_ratio = np.sum(skin_mask) / float(sub.shape[0] * sub.shape[1])
+
+        # If low skin ratio, verify image variance (e.g. grayscale / dark photo)
+        if skin_ratio < 0.03:
+            gray = cv2.cvtColor(sub, cv2.COLOR_BGR2GRAY)
+            if np.std(gray) < 16:
+                return None
+
+        # 3. Clean and return 150x180 thumbnail
+        thumb = cv2.resize(sub, (150, 180), interpolation=cv2.INTER_AREA)
         _, buffer = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
         return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
     except Exception:
