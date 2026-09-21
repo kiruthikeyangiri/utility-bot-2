@@ -163,26 +163,78 @@ def preprocess_id_card(
 
 def extract_portrait_photo(image: np.ndarray) -> Optional[str]:
     """
-    Extracts the applicant's portrait photo thumbnail from an ID card
-    and encodes it as a base64 JPEG image.
+    Detects and tightly extracts ONLY the applicant's person portrait (headshot).
+    If no human face or portrait photo is detected on the card, returns None.
     """
     if image is None or image.size == 0:
         return None
     try:
         import base64
         h, w = image.shape[:2]
-        # In Indian ID cards (Aadhaar/PAN/DL), portrait photo is typically on the left (or right) side
-        crop_y1 = int(h * 0.18)
-        crop_y2 = int(h * 0.82)
-        crop_x1 = int(w * 0.04)
-        crop_x2 = int(w * 0.38)
         
-        portrait = image[crop_y1:crop_y2, crop_x1:crop_x2]
-        if portrait.size == 0:
+        # Candidate regions:
+        # Region 1: Left Photo (PAN, Driving Licence, Some Aadhaar) - Y: 12%-62%, X: 8%-40%
+        # Region 2: Right Photo (Aadhaar Front standard layout) - Y: 15%-65%, X: 60%-92%
+        regions = [
+            (int(h * 0.12), int(h * 0.62), int(w * 0.08), int(w * 0.40)),
+            (int(h * 0.15), int(h * 0.65), int(w * 0.60), int(w * 0.92))
+        ]
+        
+        best_crop = None
+        max_skin_score = 0.0
+        
+        for y1, y2, x1, x2 in regions:
+            sub = image[y1:y2, x1:x2]
+            if sub.size == 0:
+                continue
+                
+            # Convert to YCrCb color space for human skin-tone detection
+            ycrcb = cv2.cvtColor(sub, cv2.COLOR_BGR2YCrCb)
+            cr = ycrcb[:, :, 1]
+            cb = ycrcb[:, :, 2]
+            # Human skin chrominance range
+            skin_mask = (cr >= 130) & (cr <= 175) & (cb >= 80) & (cb <= 130)
+            
+            skin_pixels = np.sum(skin_mask)
+            total_pixels = sub.shape[0] * sub.shape[1]
+            skin_ratio = skin_pixels / float(total_pixels) if total_pixels > 0 else 0
+            
+            if skin_ratio > 0.06 and skin_ratio > max_skin_score:
+                # Find the tightest bounding box of the skin cluster (the person's face)
+                mask_u8 = (skin_mask * 255).astype(np.uint8)
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
+                mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel)
+                contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                if contours:
+                    c = max(contours, key=cv2.contourArea)
+                    fx, fy, fw, fh = cv2.boundingRect(c)
+                    
+                    # Expand bounding box for complete headshot (hair, ears, chin)
+                    pad_y_top = int(fh * 0.35)
+                    pad_y_bot = int(fh * 0.35)
+                    pad_x = int(fw * 0.30)
+                    
+                    crop_top = max(0, fy - pad_y_top)
+                    crop_bot = min(sub.shape[0], fy + fh + pad_y_bot)
+                    crop_left = max(0, fx - pad_x)
+                    crop_right = min(sub.shape[1], fx + fw + pad_x)
+                    
+                    tight_face = sub[crop_top:crop_bot, crop_left:crop_right]
+                    if tight_face.shape[0] >= 35 and tight_face.shape[1] >= 35:
+                        best_crop = tight_face
+                        max_skin_score = skin_ratio
+                else:
+                    # Fallback to sub region if skin detected but contours empty
+                    best_crop = sub
+                    max_skin_score = skin_ratio
+
+        # If no skin or person face detected on the document, return None
+        if best_crop is None or max_skin_score < 0.06:
             return None
             
-        thumb = cv2.resize(portrait, (160, 200), interpolation=cv2.INTER_AREA)
-        _, buffer = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        thumb = cv2.resize(best_crop, (150, 180), interpolation=cv2.INTER_AREA)
+        _, buffer = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
         return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
     except Exception:
         return None

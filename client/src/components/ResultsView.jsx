@@ -357,25 +357,16 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
                   <div className="relative group">
                     <img src={portrait_photo} alt="Portrait"
                       className="w-32 h-40 object-cover rounded-xl border-2 border-indigo-200 shadow-md group-hover:shadow-lg transition-shadow" />
-                    <div className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded bg-emerald-600/90 text-[10px] text-white font-bold shadow">✓ Face</div>
-                  </div>
-                ) : images?.original ? (
-                  <div className="relative group">
-                    <img 
-                      src={images.original.startsWith('data:') ? images.original : `data:image/jpeg;base64,${images.original}`} 
-                      alt="Document"
-                      className="w-32 h-40 object-cover rounded-xl border-2 border-slate-300 shadow-md group-hover:shadow-lg transition-shadow" 
-                    />
-                    <div className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded bg-slate-700/90 text-[10px] text-white font-bold shadow">📄 Doc</div>
+                    <div className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded bg-emerald-600/90 text-[10px] text-white font-bold shadow">✓ Verified Face</div>
                   </div>
                 ) : (
-                  <div className="w-32 h-40 bg-slate-200/80 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 p-2 text-center">
+                  <div className="w-32 h-40 bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 p-2 text-center">
                     <User className="w-8 h-8 mb-1 opacity-50" />
-                    <span className="text-[10px] font-medium">No Image</span>
+                    <span className="text-[10px] font-medium">No Face Photo</span>
                   </div>
                 )}
                 <div className="text-[11px] text-center text-slate-600 font-medium">
-                  {document_type === 'aadhaar' ? 'Biometric Photo' : document_type.includes('back') ? 'Document Scan' : 'Cardholder ID'}
+                  {portrait_photo ? 'Applicant Portrait' : 'Document Details Only'}
                 </div>
               </div>
 
