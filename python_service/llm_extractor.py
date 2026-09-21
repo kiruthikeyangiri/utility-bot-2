@@ -178,36 +178,38 @@ def extract_document_info_pure_ocr(
             gender = "Transgender"
 
         # 4. Name extraction
-        cleaned_for_name = text
-        cleaned_for_name = re.sub(r"Issue\s*Date\s*:\s*\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4}", "", cleaned_for_name, flags=re.I)
-        cleaned_for_name = re.sub(r"(?:DOB|D0B|Date of Birth|பிறந்த நாள்|பிறந்தநாள்|जन्म तिथि)\s*[:\s]*\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4}", "", cleaned_for_name, flags=re.I)
-        cleaned_for_name = re.sub(r"\b\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{4}\b", "", cleaned_for_name)
-        cleaned_for_name = re.sub(r"\b\d+\b", "", cleaned_for_name)
-        cleaned_for_name = re.sub(r"\b(Male|Female|Transgender|ஆண்|பெண்|पुरुष|महिला)\b", "", cleaned_for_name, flags=re.I)
-        cleaned_for_name = re.sub(r"Government\s*of\s*India|Unique\s*Identification\s*Authority\s*of\s*India|UIDAI|Mera\s*Aadhaar|Aadhaar", "", cleaned_for_name, flags=re.I)
+        aadhaar_junk = [
+            "government", "india", "unique", "identification", "authority", "aadhaar", 
+            "uidai", "mera", "male", "female", "transgender", "gender", "dob", "d0b", 
+            "birth", "enrollment", "enrolment", "help", "adhikar", "aam", "aadmi", "hrr"
+        ]
 
         name = None
-        name_patterns = [
-            r"\b([A-Z]\.?\s+[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]+)*)\b",  # e.g. S Kiruthikeyan
-            r"\b([A-Z][a-zA-Z]{2,}\s+[A-Z]\.?)\b",                        # e.g. Kiruthikeyan S
-            r"\b([A-Z][a-zA-Z]{2,}\s+[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]+)*)\b"  # e.g. Suresh Kumar
-        ]
-        for pat in name_patterns:
-            m_name = re.search(pat, cleaned_for_name)
-            if m_name:
-                cand = m_name.group(1).strip()
-                if not any(j in cand.lower() for j in ["help", "india", "government", "state", "card", "valid", "enrolment"]):
-                    name = cand
-                    break
+        for line in lines:
+            line_clean = re.sub(r"[^a-zA-Z\s\.]", "", line).strip()
+            line_lower = line_clean.lower()
+            if not any(j in line_lower for j in aadhaar_junk) and not re.search(r"\d", line):
+                words = line_clean.split()
+                if 1 <= len(words) <= 4 and len(line_clean) >= 3:
+                    if line_clean.isupper() or all(w[0].isupper() for w in words if w):
+                        if not any(k in line_lower for k in ["card", "state", "valid", "union"]):
+                            name = line_clean
+                            break
 
         if not name:
-            junk_words = ["government", "india", "unique", "authority", "aadhaar", "uidai", "mera", "male", "female", "dob", "birth", "enrollment"]
-            for line in lines:
-                line_l = line.lower()
-                if not any(j in line_l for j in junk_words) and not re.search(r"\d", line):
-                    clean_line = re.sub(r"[^a-zA-Z\s\.]", "", line).strip()
-                    if len(clean_line) > 2 and len(clean_line.split()) <= 4:
-                        name = clean_line
+            name_patterns = [
+                r"\b([A-Z]\.?\s+[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]+)*)\b",  # e.g. S Kiruthikeyan
+                r"\b([A-Z][a-zA-Z]{2,}\s+[A-Z]\.?)\b",                        # e.g. Kiruthikeyan S
+                r"\b([A-Z][a-zA-Z]{2,}\s+[A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]+)*)\b"  # e.g. Suresh Kumar
+            ]
+            cleaned_for_name = re.sub(r"\b(Male|Female|Transgender|Gender|MALE|FEMALE)\b", "", text, flags=re.I)
+            cleaned_for_name = re.sub(r"\b\d+\b", "", cleaned_for_name)
+            for pat in name_patterns:
+                m_name = re.search(pat, cleaned_for_name)
+                if m_name:
+                    cand = m_name.group(1).strip()
+                    if not any(j in cand.lower() for j in aadhaar_junk):
+                        name = cand
                         break
 
         return {

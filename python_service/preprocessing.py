@@ -161,14 +161,36 @@ def preprocess_id_card(
     return processed
 
 
+_yolo_face_model = None
+
+def get_yolo_face_model():
+    """Lazily loads and caches the YOLO Face Detection model."""
+    global _yolo_face_model
+    if _yolo_face_model is not None:
+        return _yolo_face_model
+    try:
+        import os
+        from ultralytics import YOLO
+        model_path = os.path.join(os.path.dirname(__file__), "yolov8n-face.pt")
+        if not os.path.exists(model_path):
+            model_path = "yolov8n-face.pt"
+        if os.path.exists(model_path):
+            _yolo_face_model = YOLO(model_path)
+            return _yolo_face_model
+    except Exception:
+        pass
+    return None
+
+
 def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = None) -> Optional[str]:
     """
-    Detects and cleanly extracts ONLY the applicant's person portrait (headshot).
+    Detects and cleanly extracts ONLY the applicant's person portrait (headshot) using YOLO Face Detection.
     - If doc_type is a back side (aadhaar_back, pan_back, etc.), returns None immediately.
-    - For Driving Licences (DL) & Aadhaar: Dynamically locates the face in the RIGHT photo zone (X: 52%-98%, Y: 10%-75%).
-    - For PAN Cards: Dynamically locates the face in the LEFT photo zone (X: 5%-45%, Y: 12%-72%).
-    - Rejects metallic microchips, seals, and text borders.
-    - Returns base64 data URI of the cropped headshot, or None if no valid photo is found.
+    - Uses YOLO Face Detection to dynamically locate human faces anywhere on the document (no fixed coordinates).
+    - Automatically ignores QR codes, EMV smart chips, and text blocks.
+    - Adds optimal padding for hair, forehead, and collar.
+    - Falls back to dual-zone skin contour analysis if needed.
+    - Returns base64 data URI of the cropped headshot, or None if no valid face is found.
     """
     if image is None or image.size == 0:
         return None
@@ -183,67 +205,115 @@ def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = Non
         if h < 50 or w < 50:
             return None
 
+        # =========================================================================
+        # 1. PRIMARY: High-Accuracy YOLO Face Detection (Zero Fixed Coordinates)
+        # =========================================================================
+        yolo = get_yolo_face_model()
+        if yolo is not None:
+            results = yolo(image, conf=0.25, verbose=False)
+            boxes = results[0].boxes
+            if len(boxes) > 0:
+                best_box = None
+                best_conf = -1.0
+                for box in boxes:
+                    conf = float(box.conf[0])
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+                    fw = x2 - x1
+                    fh = y2 - y1
+                    # Validate realistic face aspect ratio and minimum size
+                    if fw >= 20 and fh >= 20 and 0.55 <= (fh / float(fw)) <= 2.8:
+                        if conf > best_conf:
+                            best_conf = conf
+                            best_box = (x1, y1, x2, y2, fw, fh)
+
+                if best_box is not None:
+                    x1, y1, x2, y2, fw, fh = best_box
+                    # Add portrait padding for full headshot (hair, chin, collar)
+                    pad_top = int(fh * 0.30)
+                    pad_bot = int(fh * 0.25)
+                    pad_x = int(fw * 0.20)
+
+                    crop_top = max(0, y1 - pad_top)
+                    crop_bot = min(h, y2 + pad_bot)
+                    crop_left = max(0, x1 - pad_x)
+                    crop_right = min(w, x2 + pad_x)
+
+                    face_crop = image[crop_top:crop_bot, crop_left:crop_right]
+                    if face_crop.shape[0] >= 30 and face_crop.shape[1] >= 30:
+                        thumb = cv2.resize(face_crop, (150, 180), interpolation=cv2.INTER_AREA)
+                        _, buffer = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
+                        return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
+
+        # =========================================================================
+        # 2. FALLBACK: Dual-Zone Skin Segmentation & Morphological Face Detection
+        # =========================================================================
         doc_hint = (doc_type_hint or "").lower()
+        zone_left = (int(h * 0.12), int(h * 0.78), int(w * 0.05), int(w * 0.45), "left")
+        zone_right = (int(h * 0.10), int(h * 0.78), int(w * 0.52), int(w * 0.98), "right")
 
-        # 1. Determine primary search window based on document specifications
-        if doc_hint in ["pan", "pan_front"]:
-            # PAN Card: Photo is strictly on the LEFT side
-            search_region = image[int(h * 0.12):int(h * 0.72), int(w * 0.05):int(w * 0.45)]
-        else:
-            # DL and Aadhaar: Photo is strictly on the RIGHT side (avoids left EMV chip completely)
-            search_region = image[int(h * 0.10):int(h * 0.75), int(w * 0.52):int(w * 0.98)]
+        zones = [zone_left, zone_right] if doc_hint in ["pan", "pan_front"] else [zone_right, zone_left]
+        best_crop = None
+        best_score = 0.0
 
-        if search_region.size == 0 or search_region.shape[0] < 30 or search_region.shape[1] < 30:
-            return None
+        for y1, y2, x1, x2, side in zones:
+            sub = image[y1:y2, x1:x2]
+            if sub.size == 0 or sub.shape[0] < 35 or sub.shape[1] < 35:
+                continue
 
-        # 2. Skin Segmentation using YCrCb color space
-        ycrcb = cv2.cvtColor(search_region, cv2.COLOR_BGR2YCrCb)
-        cr = ycrcb[:, :, 1]
-        cb = ycrcb[:, :, 2]
-        skin_mask = (cr >= 128) & (cr <= 178) & (cb >= 78) & (cb <= 132)
+            # Smart Chip Rejection
+            hsv = cv2.cvtColor(sub, cv2.COLOR_BGR2HSV)
+            gold_mask = (hsv[:, :, 0] >= 15) & (hsv[:, :, 0] <= 38) & (hsv[:, :, 1] >= 100) & (hsv[:, :, 2] >= 90)
+            gold_ratio = np.sum(gold_mask) / float(sub.shape[0] * sub.shape[1])
+            if side == "left" and doc_hint in ["driving_licence", "dl"] and gold_ratio > 0.12:
+                continue
 
-        # Morphological filtering to group facial skin pixels
-        mask_u8 = (skin_mask * 255).astype(np.uint8)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-        mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel)
-        contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        valid_face_contours = []
-        for c in contours:
-            area = cv2.contourArea(c)
-            if area > 350:
-                fx, fy, fw, fh = cv2.boundingRect(c)
-                aspect = fh / float(fw) if fw > 0 else 0
-                if 0.60 <= aspect <= 2.6:
-                    valid_face_contours.append((area, c, fx, fy, fw, fh))
-
-        if not valid_face_contours:
-            # Fallback to checking skin ratio in candidate region
-            skin_ratio = np.sum(skin_mask) / float(search_region.shape[0] * search_region.shape[1])
+            # Skin Segmentation
+            ycrcb = cv2.cvtColor(sub, cv2.COLOR_BGR2YCrCb)
+            skin_mask = (ycrcb[:, :, 1] >= 128) & (ycrcb[:, :, 1] <= 178) & (ycrcb[:, :, 2] >= 78) & (ycrcb[:, :, 2] <= 132)
+            skin_ratio = np.sum(skin_mask) / float(sub.shape[0] * sub.shape[1])
             if skin_ratio < 0.04:
-                return None
-            face_crop = search_region
-        else:
-            # Take the largest face contour
-            valid_face_contours.sort(key=lambda x: x[0], reverse=True)
-            _, best_c, fx, fy, fw, fh = valid_face_contours[0]
+                continue
 
-            pad_top = int(fh * 0.25)
-            pad_bot = int(fh * 0.20)
-            pad_x = int(fw * 0.15)
+            mask_u8 = (skin_mask * 255).astype(np.uint8)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+            mask_u8 = cv2.morphologyEx(mask_u8, cv2.MORPH_CLOSE, kernel)
+            contours, _ = cv2.findContours(mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            valid_faces = []
+            for c in contours:
+                area = cv2.contourArea(c)
+                if area > 400:
+                    fx, fy, fw, fh = cv2.boundingRect(c)
+                    aspect = fh / float(fw) if fw > 0 else 0
+                    if 0.60 <= aspect <= 2.6:
+                        valid_faces.append((area, c, fx, fy, fw, fh))
+
+            if not valid_faces:
+                continue
+
+            valid_faces.sort(key=lambda x: x[0], reverse=True)
+            area, best_c, fx, fy, fw, fh = valid_faces[0]
+
+            pad_top = int(fh * 0.22)
+            pad_bot = int(fh * 0.18)
+            pad_x = int(fw * 0.10)
 
             crop_top = max(0, fy - pad_top)
-            crop_bot = min(search_region.shape[0], fy + fh + pad_bot)
+            crop_bot = min(sub.shape[0], fy + fh + pad_bot)
             crop_left = max(0, fx - pad_x)
-            crop_right = min(search_region.shape[1], fx + fw + pad_x)
+            crop_right = min(sub.shape[1], fx + fw + pad_x)
 
-            face_crop = search_region[crop_top:crop_bot, crop_left:crop_right]
+            candidate_crop = sub[crop_top:crop_bot, crop_left:crop_right]
+            score = area * skin_ratio
 
-        if face_crop.shape[0] < 25 or face_crop.shape[1] < 25:
+            if score > best_score:
+                best_score = score
+                best_crop = candidate_crop
+
+        if best_crop is None:
             return None
 
-        # 3. Clean and return standard 150x180 thumbnail
-        thumb = cv2.resize(face_crop, (150, 180), interpolation=cv2.INTER_AREA)
+        thumb = cv2.resize(best_crop, (150, 180), interpolation=cv2.INTER_AREA)
         _, buffer = cv2.imencode(".jpg", thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 92])
         return f"data:image/jpeg;base64,{base64.b64encode(buffer).decode('utf-8')}"
     except Exception:
