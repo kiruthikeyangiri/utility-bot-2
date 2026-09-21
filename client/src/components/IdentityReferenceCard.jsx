@@ -88,36 +88,36 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
       )}
 
       {/* ================================================================= */}
-      {/* 1. PHYSICAL / DIGITAL IDENTITY REFERENCE CARD                      */}
+      {/* 1. PHYSICAL / DIGITAL IDENTITY REFERENCE CARD (LIGHT THEME)        */}
       {/* ================================================================= */}
-      <div className="max-w-xl mx-auto bg-gradient-to-b from-slate-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-1 shadow-2xl border border-slate-700/60 relative overflow-hidden">
+      <div className="max-w-xl mx-auto bg-white text-slate-900 rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/60 border border-slate-200/90 relative overflow-hidden transition-all">
         
-        {/* Background glow effects */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
+        {/* Subtle background ambient gradients */}
+        <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-indigo-50/60 to-transparent rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-72 h-72 bg-gradient-to-tr from-sky-50/60 to-transparent rounded-full blur-3xl pointer-events-none" />
 
-        {/* Card Inner Container */}
-        <div className="bg-slate-900/90 backdrop-blur-xl rounded-[22px] p-6 sm:p-8 space-y-6 relative border border-white/10">
+        {/* Card Content */}
+        <div className="space-y-6 relative">
 
           {/* Card Header */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div className="flex items-center space-x-2.5">
-              <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shadow-inner">
+              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-sm">
                 <ShieldCheck className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-xs font-extrabold tracking-widest uppercase text-indigo-300">IDENTITY REFERENCE</h3>
-                <p className="text-[10px] text-slate-400">Privacy-Safe Verification Token</p>
+                <h3 className="text-xs font-black tracking-widest uppercase text-slate-900">IDENTITY REFERENCE</h3>
+                <p className="text-[10px] text-slate-500 font-medium">Privacy-Safe Verification Token</p>
               </div>
             </div>
 
             {/* Verification Status Badge */}
-            <div className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[11px] font-bold tracking-wide border shadow-sm ${
+            <div className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold tracking-wide border shadow-sm ${
               isRevoked 
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
             }`}>
-              {isRevoked ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              {isRevoked ? <XCircle className="w-3.5 h-3.5 text-rose-600" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
               <span>{isRevoked ? 'REVOKED' : '✓ DETAILS CONFIRMED'}</span>
             </div>
           </div>
@@ -132,16 +132,16 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
                   <img
                     src={photo}
                     alt="Applicant"
-                    className="w-28 h-36 object-cover rounded-xl border-2 border-indigo-400/40 shadow-lg"
+                    className="w-28 h-36 object-cover rounded-2xl border-2 border-indigo-100 shadow-md group-hover:shadow-lg transition-shadow"
                   />
                 ) : (
-                  <div className="w-28 h-36 bg-slate-800 rounded-xl border-2 border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500">
+                  <div className="w-28 h-36 bg-slate-100 rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-400">
                     <User className="w-8 h-8 opacity-40 mb-1" />
-                    <span className="text-[10px]">Photo Verified</span>
+                    <span className="text-[10px] font-medium">Photo Verified</span>
                   </div>
                 )}
                 <div className="absolute -bottom-2 inset-x-0 flex justify-center">
-                  <span className="px-2 py-0.5 rounded-full bg-indigo-600/90 text-white text-[9px] font-bold tracking-wider uppercase shadow">
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white text-[9px] font-bold tracking-wider uppercase shadow-md shadow-indigo-600/20">
                     Verified Face
                   </span>
                 </div>
@@ -151,26 +151,26 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
             {/* Right: Key Confirmed Identity Details */}
             <div className="sm:col-span-8 space-y-3 pl-0 sm:pl-2">
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Full Name</span>
-                <p className="text-base font-bold text-white tracking-wide truncate">{name}</p>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Full Name</span>
+                <p className="text-base font-extrabold text-slate-900 tracking-tight truncate">{name}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">ID Type</span>
-                  <p className="text-xs font-semibold text-indigo-200">{document_type_display}</p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">ID Type</span>
+                  <p className="text-xs font-bold text-indigo-700 bg-indigo-50/80 px-2 py-0.5 rounded-md border border-indigo-100 inline-block">{document_type_display}</p>
                 </div>
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Confirmed On</span>
-                  <p className="text-xs font-medium text-slate-300">{formattedDate}</p>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Confirmed On</span>
+                  <p className="text-xs font-semibold text-slate-700">{formattedDate}</p>
                 </div>
               </div>
 
               <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
                   {document_type_display} Number (Masked)
                 </span>
-                <p className="text-xs font-mono font-bold tracking-widest text-emerald-400 bg-slate-950/60 px-2.5 py-1 rounded-lg border border-slate-800 inline-block mt-0.5">
+                <p className="text-xs font-mono font-bold tracking-widest text-emerald-800 bg-emerald-50/90 px-3 py-1.5 rounded-xl border border-emerald-200 shadow-sm inline-block">
                   {masked_number}
                 </p>
               </div>
@@ -179,16 +179,16 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
           </div>
 
           {/* Card Lower Section: Reference ID & QR Code Box */}
-          <div className="bg-slate-950/70 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="bg-gradient-to-r from-slate-50 via-indigo-50/30 to-slate-50 border border-slate-200/90 rounded-2xl p-4.5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
             
             <div className="space-y-1 text-center sm:text-left">
-              <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider block">Privacy Reference ID</span>
-              <p className="text-sm font-mono font-extrabold tracking-wider text-white select-all">
+              <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block">Privacy Reference ID</span>
+              <p className="text-sm sm:text-base font-mono font-black tracking-wider text-slate-900 select-all">
                 {reference_id}
               </p>
-              <div className="flex items-center space-x-2 text-[10px] text-slate-400 justify-center sm:justify-start pt-0.5">
-                <Lock className="w-3 h-3 text-slate-500" />
-                <span>Internal Ref: <strong className="text-slate-300">{verification_id}</strong></span>
+              <div className="flex items-center space-x-2 text-[10px] text-slate-500 justify-center sm:justify-start pt-0.5">
+                <Lock className="w-3 h-3 text-slate-400" />
+                <span>Internal Ref: <strong className="text-slate-700 font-semibold">{verification_id}</strong></span>
               </div>
             </div>
 
@@ -196,7 +196,7 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
             {qr_code_image && (
               <button
                 onClick={() => setShowQrModal(true)}
-                className="group relative p-1.5 rounded-xl bg-white hover:bg-slate-100 transition shadow-md flex-shrink-0 cursor-pointer"
+                className="group relative p-2 rounded-2xl bg-white hover:bg-slate-50 transition-all border border-slate-200/90 shadow-sm hover:shadow-md flex-shrink-0 cursor-pointer"
                 title="Click to expand QR code"
               >
                 <img
@@ -204,7 +204,7 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
                   alt="Reference QR Token"
                   className="w-16 h-16 object-contain"
                 />
-                <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition rounded-xl flex items-center justify-center text-white text-[10px] font-bold">
+                <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition rounded-2xl flex items-center justify-center text-white text-[10px] font-bold">
                   <Eye className="w-3.5 h-3.5 mr-1" /> View
                 </div>
               </button>
@@ -213,12 +213,12 @@ export default function IdentityReferenceCard({ referenceData, onProcessNew, onR
           </div>
 
           {/* Privacy Guarantee Footer Note */}
-          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
-            <span className="flex items-center space-x-1">
-              <Lock className="w-2.5 h-2.5 text-emerald-500" />
-              <span>Original ID Document: <strong className="text-slate-400">NOT DISPLAYED</strong></span>
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
+            <span className="flex items-center space-x-1.5">
+              <Lock className="w-3 h-3 text-emerald-600" />
+              <span>Original ID Document: <strong className="text-slate-700 font-semibold">NOT DISPLAYED</strong></span>
             </span>
-            <span>Tamper-Protected</span>
+            <span className="font-semibold text-slate-400">Tamper-Protected</span>
           </div>
 
         </div>
