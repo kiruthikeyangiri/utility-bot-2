@@ -7,7 +7,7 @@ import VisualPipeline from './components/VisualPipeline';
 import JsonViewer from './components/JsonViewer';
 import HistoryDrawer from './components/HistoryDrawer';
 import { extractDocumentApi, getHealthApi } from './services/api';
-import { Sparkles, Eye, FileText, Code, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { ScanText, Eye, FileText, Code, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
 
 export default function App() {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -127,7 +127,7 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-5 h-5" />
+                  <ScanText className="w-5 h-5" />
                   <span>Extract Document Information</span>
                   <ArrowRight className="w-5 h-5" />
                 </>
@@ -161,7 +161,7 @@ export default function App() {
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
-                <Sparkles className="w-4 h-4" />
+                <FileText className="w-4 h-4" />
                 <span>Extracted Fields</span>
               </button>
 

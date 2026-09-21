@@ -20,7 +20,7 @@ import {
   Upload,
   CheckCircle2,
   Lock,
-  Sparkles,
+  Cpu,
   Award,
   ChevronRight,
   CalendarDays,
@@ -460,7 +460,7 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
           </div>
           <div className="flex items-center space-x-2.5 text-[10px] text-slate-400">
             <span className="flex items-center space-x-1">
-              <Sparkles className="w-2.5 h-2.5" />
+              <Cpu className="w-2.5 h-2.5" />
               <span>RapidOCR</span>
             </span>
             {result.ocr_confidence > 0 && (

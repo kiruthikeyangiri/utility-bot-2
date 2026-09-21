@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Trash2, FileText, Search, RefreshCw, ChevronRight, Clock, HardDrive, Sparkles, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { X, Trash2, FileText, Search, RefreshCw, ChevronRight, Clock, HardDrive, AlertCircle, Image as ImageIcon } from 'lucide-react';
 import { getHistoryApi, deleteHistoryApi, getStorageStatsApi, cleanStorageApi } from '../services/api';
 
 export default function HistoryDrawer({ isOpen, onClose, onSelectDocument }) {
