@@ -188,8 +188,8 @@ def confirm_verification_decision(
 ):
     """
     Human-in-the-Loop Confirmation Gateway endpoint:
-    - 'correct': Assigns sequential ID 'IMG000001', sets status='Success', saves to 'verifications' (Visible in History).
-    - 'wrong': Assigns sequential ID 'FAIL000001', sets status='Failed', saves to 'failed_verifications' (Hidden from History).
+    - 'correct': Assigns sequential ID 'IMG000001', saves internal record, and generates privacy Identity Reference Card.
+    - 'wrong': Assigns sequential ID 'FAIL000001', records audit failure (no reference card created).
     """
     active_device = x_device_id or payload.deviceId or "default_client"
     res = save_confirmed_verification(
@@ -201,7 +201,59 @@ def confirm_verification_decision(
         portrait_photo=payload.portrait_photo,
         device_id=active_device
     )
+
+    # Privacy-Safe Reference Card Generation on User Confirmation
+    if payload.action == "correct":
+        try:
+            from reference_service import create_identity_reference
+            clean_data = payload.data or {}
+            if hasattr(clean_data, "dict"):
+                clean_data = clean_data.dict()
+            elif hasattr(clean_data, "model_dump"):
+                clean_data = clean_data.model_dump()
+
+            ref_record = create_identity_reference(
+                verification_id=res.get("sequential_id") or res.get("id"),
+                document_type=payload.document_type,
+                extracted_data=clean_data,
+                portrait_photo=payload.portrait_photo,
+                device_id=active_device
+            )
+            res["reference_card"] = ref_record
+        except Exception as ref_err:
+            print(f"[Confirmation] Reference generation notice: {ref_err}")
+            res["reference_card"] = None
+    else:
+        res["reference_card"] = None
+
     return res
+
+
+@app.get("/reference/{ref_id}")
+def get_public_reference_card(ref_id: str):
+    """
+    Public QR Verification Endpoint.
+    Returns ONLY privacy-safe masked data.
+    Never exposes raw unmasked numbers, OCR text, or full document image.
+    """
+    from reference_service import get_reference_by_id
+    rec = get_reference_by_id(ref_id)
+    if not rec:
+        raise HTTPException(status_code=404, detail="Identity Reference Card not found.")
+    return rec
+
+
+@app.post("/reference/{ref_id}/revoke")
+def revoke_public_reference_card(ref_id: str):
+    """
+    Revokes an active Reference Card so it immediately becomes invalid.
+    """
+    from reference_service import revoke_reference_by_id
+    success = revoke_reference_by_id(ref_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Reference card not found or already revoked.")
+    return {"message": f"Reference ID {ref_id} has been revoked successfully.", "status": "REVOKED"}
+
 
 
 @app.post("/extract", response_model=FinalExtractionResult)

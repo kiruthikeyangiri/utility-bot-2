@@ -29,6 +29,7 @@ import {
   ThumbsDown
 } from 'lucide-react';
 import { confirmVerificationApi } from '../services/api';
+import IdentityReferenceCard from './IdentityReferenceCard';
 
 export default function ResultsView({ result, onUploadAnother, onRetryScan, isRetrying }) {
   if (!result) return null;
@@ -44,22 +45,27 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
     images, 
     portrait_photo, 
     status: initialStatus,
-    sequential_id: initialSeqId
+    sequential_id: initialSeqId,
+    reference_card: initialRefCard
   } = result;
 
   const [formData, setFormData] = useState(data || {});
   const [confirmationStatus, setConfirmationStatus] = useState(initialStatus || 'Pending Confirmation');
   const [confirmedId, setConfirmedId] = useState(initialSeqId || null);
+  const [referenceCardData, setReferenceCardData] = useState(initialRefCard || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState(null);
   const [showWrongActions, setShowWrongActions] = useState(false);
+  const [viewMode, setViewMode] = useState('reference'); // 'reference' | 'details'
 
   useEffect(() => {
     setFormData(data || {});
     setConfirmationStatus(result.status || 'Pending Confirmation');
     setConfirmedId(result.sequential_id || result.id || null);
+    setReferenceCardData(result.reference_card || null);
     setConfirmMessage(null);
     setShowWrongActions(false);
+    setViewMode('reference');
   }, [result]);
 
   const handleFieldChange = (field, val) => {
@@ -89,11 +95,16 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
       setConfirmationStatus(response.status);
       
       if (action === 'correct') {
+        if (response.reference_card) {
+          setReferenceCardData(response.reference_card);
+          setViewMode('reference');
+        }
         setConfirmMessage({
           type: 'success',
-          text: `Verified! ID: ${response.sequential_id || response.id} — Saved to verifications.`
+          text: `Confirmed! Internal ID: ${response.sequential_id || response.id} — Privacy Reference Card Generated.`
         });
       } else {
+        setReferenceCardData(null);
         setConfirmMessage({
           type: 'failed',
           text: `Rejected. Audit ID: ${response.sequential_id || response.id} — Stored in failed_verifications.`
@@ -203,7 +214,7 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
 
       {/* Deep Scan Loading Indicator Banner */}
       {isRetrying && (
@@ -216,21 +227,63 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
         </div>
       )}
 
-      {/* ================================================================= */}
-      {/* EXTRACTED DETAILS CARD (Clean, Modern, Full-Width)                */}
-      {/* ================================================================= */}
-      <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden transition-all duration-200">
-        
-        {/* Card Header with Integrated Status Badge */}
-        <div className="px-6 py-4.5 border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-slate-50/40 to-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <div>{getBadge()}</div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-              {document_type === 'unsupported' 
-                ? 'Verification Declined' 
-                : `${document_type.replace(/_/g, ' ').toUpperCase()} Details`}
-            </h2>
+      {/* Confirmation Toast Alert */}
+      {confirmMessage && (
+        <div className={`p-4 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-bottom-1 duration-300 ${
+          confirmMessage.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-900 border border-emerald-200' 
+            : confirmMessage.type === 'failed'
+              ? 'bg-rose-50 text-rose-900 border border-rose-200'
+              : 'bg-orange-50 text-orange-900 border border-orange-200'
+        }`}>
+          <div className="flex items-center space-x-2.5">
+            {confirmMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            )}
+            <span>{confirmMessage.text}</span>
           </div>
+
+          {referenceCardData && (
+            <button
+              onClick={() => setViewMode(prev => prev === 'reference' ? 'details' : 'reference')}
+              className="px-3 py-1 bg-white hover:bg-slate-50 text-slate-700 rounded-lg border border-slate-200 text-[11px] font-bold transition shadow-sm cursor-pointer ml-3 flex-shrink-0"
+            >
+              {viewMode === 'reference' ? 'View Extracted Fields' : 'View Reference Card'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* 1. IDENTITY REFERENCE CARD (Shown upon Successful Confirmation)   */}
+      {/* ================================================================= */}
+      {referenceCardData && viewMode === 'reference' ? (
+        <IdentityReferenceCard
+          referenceData={referenceCardData}
+          onProcessNew={onUploadAnother}
+          onRevoked={(refId) => {
+            setReferenceCardData(prev => prev ? ({ ...prev, revoked: true, verification_status: 'REVOKED' }) : null);
+          }}
+        />
+      ) : (
+        <>
+          {/* ============================================================= */}
+          {/* 2. EXTRACTED DETAILS CARD                                      */}
+          {/* ============================================================= */}
+          <div className="bg-white border border-slate-200/90 rounded-2xl shadow-sm overflow-hidden transition-all duration-200">
+            
+            {/* Card Header with Integrated Status Badge */}
+            <div className="px-6 py-4.5 border-b border-slate-100 bg-gradient-to-r from-slate-50/90 via-slate-50/40 to-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <div>{getBadge()}</div>
+                <h2 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
+                  {document_type === 'unsupported' 
+                    ? 'Verification Declined' 
+                    : `${document_type.replace(/_/g, ' ').toUpperCase()} Details`}
+                </h2>
+              </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
             {confirmedId ? (
@@ -501,25 +554,28 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
         </div>
       )}
 
-      {/* 3. Post-Success Actions: Shown when status is Success */}
-      {confirmationStatus === 'Success' && (
-        <div className="flex items-center justify-center gap-3 pt-1">
-          <button
-            onClick={handleRetryClick}
-            disabled={isRetrying}
-            className="inline-flex items-center space-x-1.5 py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] border border-slate-200 transition-all cursor-pointer"
-          >
-            <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
-            <span>{isRetrying ? 'Scanning...' : 'Re-scan'}</span>
-          </button>
-          <button
-            onClick={onUploadAnother}
-            className="inline-flex items-center space-x-1.5 py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] border border-slate-200 transition-all cursor-pointer"
-          >
-            <Upload className="w-3 h-3" />
-            <span>New Document</span>
-          </button>
-        </div>
+          {/* 3. Post-Success Actions: Shown when status is Success */}
+          {confirmationStatus === 'Success' && !referenceCardData && (
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <button
+                onClick={handleRetryClick}
+                disabled={isRetrying}
+                className="inline-flex items-center space-x-1.5 py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] border border-slate-200 transition-all cursor-pointer"
+              >
+                <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                <span>{isRetrying ? 'Scanning...' : 'Re-scan'}</span>
+              </button>
+              <button
+                onClick={onUploadAnother}
+                className="inline-flex items-center space-x-1.5 py-2 px-4 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[11px] border border-slate-200 transition-all cursor-pointer"
+              >
+                <Upload className="w-3 h-3" />
+                <span>New Document</span>
+              </button>
+            </div>
+          )}
+
+        </>
       )}
 
     </div>

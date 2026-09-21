@@ -198,3 +198,20 @@ export const cleanStorageApi = async (forceAll = false) => {
   const response = await api.post(`/storage/clean?force_all=${forceAll}`);
   return response.data;
 };
+
+/**
+ * Retrieves public privacy-safe Identity Reference Record.
+ */
+export const getReferenceApi = async (refId) => {
+  const response = await api.get(`/reference/${refId}`);
+  return response.data;
+};
+
+/**
+ * Revokes an existing Reference Card.
+ */
+export const revokeReferenceApi = async (refId) => {
+  const response = await api.post(`/reference/${refId}/revoke`);
+  return response.data;
+};
+
