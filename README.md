@@ -12,76 +12,122 @@
 
 ---
 
-## 📊 End-to-End System Architecture
+## 📊 System Architecture Flowchart
 
-```text
-┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                               PHASE 1: CUSTOMER DOCUMENT INTAKE                                        │
-│  • Clean Centered Upload Zone (Drag-and-Drop, File Browser, Smartphone Scans)                         │
-│  • Instant 0.01s Pre-Flight Format Validation (JPG, JPEG, PNG) & Live High-Resolution Preview           │
-│  • Station & Device Privacy Isolation (Scoped via X-Device-Id client headers)                         │
-└───────────────────────────────────────────────────┬────────────────────────────────────────────────────┘
-                                                    │ Secure HTTPS Stream
-                                                    ▼
-┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                        PHASE 2: AUTOMATED AI VERIFICATION ENGINE (< 1.2s)                              │
-│                                                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 🔍 1. Image Quality Assessment & Adaptive Enhancement                                            │  │
-│  │ • Blur Detection: Rejects blurry or unreadable scans via Laplacian focus variance                │  │
-│  │ • Adaptive Glare Reduction & CLAHE: Balances contrast and removes plastic lamination glare       │  │
-│  └────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
-│                                                   │ Cleaned Image Matrix                               │
-│                                                   ▼                                                    │
-│  ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 📖 2. Intelligent Optical Text Extraction (RapidOCR - ONNX Runtime)                              │  │
-│  │ • Pure Python ONNX OCR: High-speed extraction with 2D bounding boxes (no Tesseract required)     │  │
-│  │ • Multi-Column Layout Preservation: Resolves names, dates, DL numbers, and addresses             │  │
-│  └────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
-│                                                   │ OCR Layout Stream                                  │
-│                                                   ▼                                                    │
-│  ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 🛡️ 3. Pre-AI Decision Gate & Heuristic Classifier                                                │  │
-│  │ • Instant Rejection: Non-identity documents (bills, receipts) rejected in 0.05s ($0.00 cost)     │  │
-│  │ • Document Signature Match: Identifies Aadhaar (Front/Back), PAN (Front/Back), or DL (Front/Back)│  │
-│  └────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
-│                                                   │ Verified Document Match                            │
-│                                                   ▼                                                    │
-│  ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 👤 4. Dynamic YOLOv8 Face Detection (Zero Fixed Coordinates)                                     │  │
-│  │ • Neural Headshot Localization: Automatically pinpoints applicant portrait anywhere on the card │  │
-│  │ • Smart Chip & QR Code Rejection: Ignores EMV microchips on DLs and large QR codes on Aadhaar    │  │
-│  │ • Privacy Guard: Back-side document uploads strictly return null face crops                      │  │
-│  └────────────────────────────────────────────────┬─────────────────────────────────────────────────┘  │
-│                                                   │ Structured KYC Payload                             │
-│                                                   ▼                                                    │
-│  ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐  │
-│  │ 🔒 5. Regulatory Compliance, Masking & Anti-Fraud Verification                                   │  │
-│  │ • UIDAI Aadhaar Masking: Automatically masks first 8 digits (e.g., ********2222)                 │  │
-│  │ • Mathematical Checksums: Validates 12-digit Aadhaar Verhoeff checksum & 10-char PAN format      │  │
-│  │ • Date Standardization: Auto-sorts DOB, Issue Date, and Validity into universal ISO formats      │  │
-│  └──────────────────────────────────────────────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────┬────────────────────────────────────────────────────┘
-                                                    │ Validated Record Pending Confirmation
-                                                    ▼
-┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                        PHASE 3: PRIVACY-SAFE IDENTITY REFERENCE CARD                                   │
-│  • User Reviews Extracted Information & Clicks "Confirm & Verify"                                      │
-│  • Generates Unguessable Secure Reference ID (e.g., PAN-KYC-3C89B0E1)                                  │
-│  • Masks Original Document Number (XXXX XXXX 4582 / XXXXX1260E / XXXXXXXX 7845)                        │
-│  • Creates Scannable Verification QR Token (Contains only non-sensitive cryptographic proof)           │
-│  • Zero Document Exposure: Original identity photo/scans are NEVER displayed on public reference cards │
-└───────────────────────────────────────────────────┬────────────────────────────────────────────────────┘
-                                                    │ Instant Cloud & Local Sync
-                                                    ▼
-┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                        PHASE 4: ENTERPRISE DATABASE & 30-DAY RETENTION                                 │
-│  • ☁️ MongoDB Atlas Cloud: Automated sync to `verifications` and `identity_references` collections      │
-│  • 📁 In-Memory Local Store: Offline-first operation with device-scoped privacy                        │
-│  • ⏱️ Automated 30-Day Auto-Purge Policy: Expired records cleaned up to satisfy data privacy laws      │
-│  • 🔄 Real-Time Revocation Support: Instantly invalidate any reference card via `POST /revoke`         │
-└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    %% ==========================================
+    %% COLUMN 1: GUI / FRONTEND
+    %% ==========================================
+    subgraph Frontend["GUI / Frontend"]
+        Upload["📤 Upload Document"]
+        MIME["🔍 MIME & Quality Validation"]
+        
+        subgraph ConfirmBlock["User Confirmation"]
+            ConfYes["✅ Confirm (Yes)"]
+            ConfNo["❌ Correct (No)"]
+        end
+        
+        subgraph RetryBlock["Retry Flow"]
+            RetryDeep["⚡ Deep Retry Scan"]
+            UploadNew["🔄 Upload New Image"]
+        end
+        
+        History["📜 History Drawer"]
+        SuccessUI["🎉 Success UI / Reference Card"]
+    end
+
+    %% ==========================================
+    %% COLUMN 2: BACKEND
+    %% ==========================================
+    subgraph Backend["FastAPI Backend Engine"]
+        Preproc["🖼️ Image Preprocessing (OpenCV)<br/><i>• Glare Reduction<br/>• CLAHE Contrast<br/>• Bilateral Denoising</i>"]
+        OCR_YOLO["📖 RapidOCR + YOLOv8 Face<br/><i>• Text Words & Bounding Boxes<br/>• Neural Face Detection</i>"]
+        JSONFormat["📋 JSON Formats<br/><i>• Structured Pydantic Payload<br/>• Masked ID Numbers<br/>• Normalized Dates</i>"]
+        StoreLogic{"⚖️ Logic to Store<br/>DB & LS"}
+    end
+
+    %% ==========================================
+    %% COLUMN 3: EXTERNAL AI
+    %% ==========================================
+    subgraph ExternalAI["External AI Layer"]
+        GroqLLM["🧠 Groq Cloud AI<br/><i>Llama 3.3 70B (Optional)</i><br/>• Text Parsing & Heuristics"]
+    end
+
+    %% ==========================================
+    %% COLUMN 4: DATABASE
+    %% ==========================================
+    subgraph Database["Database & Storage"]
+        MongoDB[("☁️ MongoDB Atlas Cloud<br/>• `verifications`<br/>• `identity_references`")]
+        LocalStore[("📁 Local Store (LS)<br/>• In-Memory JSON Store<br/>• 30-Day Auto-Purge")]
+    end
+
+    %% ==========================================
+    %% WORKFLOW CONNECTIONS
+    %% ==========================================
+    Upload -->|"Customer Document Submission"| MIME
+    MIME -->|"Valid Document Accepted"| Preproc
+    
+    Preproc -->|"Enhanced Matrix (denoised, thresholded)"| OCR_YOLO
+    
+    OCR_YOLO -->|"Text Scanning & Layout Streams"| GroqLLM
+    GroqLLM -->|"Structured JSON Extraction"| JSONFormat
+    OCR_YOLO -->|"Pure OCR / Regex Heuristics"| JSONFormat
+    
+    JSONFormat -->|"Render Verification Card"| ConfirmBlock
+    
+    ConfNo -->|"Rejected / Fields Edited"| RetryBlock
+    RetryDeep -->|"Trigger Deep Multi-Pass Scan"| Preproc
+    UploadNew -->|"Fresh Intake Loop"| Upload
+    
+    ConfYes -->|"Formatted Database Record Object"| StoreLogic
+    
+    StoreLogic -->|"Mirrors to Cloud Database"| MongoDB
+    StoreLogic -->|"Mirrors to Device Scoped Store"| LocalStore
+    
+    StoreLogic -->|"Syncs Real-Time Status"| History
+    History --> SuccessUI
+
+    %% Styling
+    style Frontend fill:#f8fafc,stroke:#94a3b8,stroke-width:2px;
+    style Backend fill:#f0fdf4,stroke:#86efac,stroke-width:2px;
+    style ExternalAI fill:#fff7ed,stroke:#fdba74,stroke-width:2px;
+    style Database fill:#f5f3ff,stroke:#c4b5fd,stroke-width:2px;
+    style StoreLogic fill:#fef08a,stroke:#eab308,stroke-width:2px;
+    style ConfYes fill:#bbf7d0,stroke:#22c55e;
+    style ConfNo fill:#fecaca,stroke:#ef4444;
+    style MongoDB fill:#dcfce7,stroke:#16a34a,stroke-width:2px;
+    style LocalStore fill:#dcfce7,stroke:#16a34a,stroke-width:2px;
 ```
+
+---
+
+## 🏗️ 4-Tier Enterprise Architecture Breakdown
+
+### **1. GUI / Frontend (React 18 + Vite + Tailwind CSS)**
+- **Intake & Upload Zone:** Intuitive drag-and-drop document upload with instant MIME format checking.
+- **Confirmation & Review:** Displays extracted fields and YOLO portrait thumbnail for user verification.
+- **Smart Retry Flow:**
+  - *Deep Scan Retry:* Triggers multi-pass CLAHE contrast enhancement and bilateral denoising for low-quality or blurry scans.
+  - *Upload New Image:* Seamlessly loops back to intake for a fresh document scan.
+- **Audit & History Drawer:** Shows verified records and 30-day retention policies filtered by station device ID.
+- **Privacy Reference Card UI:** Generates privacy-safe reference cards with masked numbers and scannable QR tokens upon confirmation.
+
+### **2. FastAPI Backend Engine (Python 3.10+)**
+- **OpenCV Image Preprocessing:** Cleans uploaded images by reducing glare, flattening lighting gradients, and applying adaptive binarization.
+- **RapidOCR Text Extraction (ONNX Runtime):** Pure Python OCR running on local CPU/GPU without external Tesseract dependencies.
+- **YOLOv8 Face Detection (`yolov8n-face`):** Dynamically pinpoints applicant headshots across any card position with zero fixed coordinates while rejecting EMV smart chips and QR codes.
+- **Structured JSON Normalization:** Converts multi-line messy OCR outputs into strict Pydantic schemas with standardized ISO dates and masked ID numbers.
+- **Storage Decision Logic:** Manages dual-write syncing between local in-memory storage and cloud database.
+
+### **3. External AI Layer (Groq Cloud LPU)**
+- **Groq Llama 3.3 70B:** Sub-second cloud LLM inference for handling complex multilingual scripts (Hindi, Tamil, English) and handwritten/distorted card artifacts.
+- **Offline Fallback:** Automatically runs 100% offline using the built-in regex and OCR heuristics engine when no API key is provided.
+
+### **4. Database & Storage Layer**
+- **MongoDB Atlas Cloud:** Centralized enterprise database managing `verifications` and `identity_references` collections.
+- **Local In-Memory Store (LS):** High-speed station cache guaranteeing sub-millisecond read access even during network disruptions.
+- **30-Day Retention Auto-Purge:** Background maintenance engine that automatically deletes expired identity records in accordance with statutory privacy regulations.
 
 ---
 
