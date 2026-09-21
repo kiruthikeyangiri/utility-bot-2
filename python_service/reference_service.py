@@ -204,18 +204,12 @@ def create_identity_reference(
         records = records[:500]
     write_reference_records(records)
 
-    # 2. Sync to MongoDB Atlas if Data API / connection is configured
+    # 2. Sync to MongoDB Atlas
     try:
-        from storage import IS_MONGO_ONLINE, _atlas_request
-        if IS_MONGO_ONLINE:
-            _atlas_request("replaceOne", "identity_references", {
-                "filter": {"reference_id": ref_id},
-                "replacement": reference_record,
-                "upsert": True
-            })
-            print(f"[ReferenceService] Synced Reference ID {ref_id} to MongoDB Atlas 'identity_references'!")
+        from storage import sync_record_to_mongodb
+        sync_record_to_mongodb("identity_references", ref_id, reference_record)
     except Exception as err:
-        print(f"[ReferenceService] MongoDB sync notice (local record preserved): {err}")
+        print(f"[ReferenceService] MongoDB sync notice: {err}")
 
     return reference_record
 

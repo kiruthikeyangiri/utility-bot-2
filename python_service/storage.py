@@ -72,16 +72,16 @@ def _atlas_request(action: str, collection: str, body: dict) -> dict:
         raise RuntimeError(f"Atlas Data API error: {err}") from err
 
 def get_mongo_client():
-    """Returns a MongoClient with certifi SSL if MONGODB_URI is provided."""
+    """Returns a MongoClient with TLS settings for MongoDB Atlas."""
     if not MONGODB_URI:
         return None
     try:
         import pymongo
-        import certifi
         return pymongo.MongoClient(
             MONGODB_URI,
-            tlsCAFile=certifi.where(),
-            serverSelectionTimeoutMS=3000
+            tls=True,
+            tlsAllowInvalidCertificates=True,
+            serverSelectionTimeoutMS=4000
         )
     except Exception:
         return None
