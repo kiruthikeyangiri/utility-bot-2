@@ -168,6 +168,27 @@ def calculate_dob_similarity(dob1_raw: Optional[str], dob2_raw: Optional[str]) -
     return 0.0, "MISMATCH", f"DOB Mismatch ({dob1_raw} vs {dob2_raw})"
 
 
+def get_base_doc_type(doc_type: str) -> str:
+    """Normalizes document types to base category (aadhaar, pan, driving_licence)."""
+    t = (doc_type or "").lower().strip()
+    if "aadhaar" in t:
+        return "aadhaar"
+    if "pan" in t:
+        return "pan"
+    if "driving" in t or "dl" in t or "licence" in t or "license" in t:
+        return "driving_licence"
+    return t
+
+
+def get_doc_title(base_type: str) -> str:
+    titles = {
+        "aadhaar": "Aadhaar Card",
+        "pan": "PAN Card",
+        "driving_licence": "Driving Licence"
+    }
+    return titles.get(base_type, base_type.replace("_", " ").title())
+
+
 def cross_verify_documents(
     doc1_data: Dict[str, Any],
     doc2_data: Dict[str, Any],
@@ -178,14 +199,37 @@ def cross_verify_documents(
 ) -> Dict[str, Any]:
     """
     Performs complete cross-verification between Document 1 and Document 2.
-    
-    Returns:
-        Structured Cross-Verification Report:
-        - overall_consistency_score: float (0.0 to 100.0)
-        - consistency_status: 'DOCUMENTS_CONSISTENT' | 'DOCUMENTS_MISMATCH'
-        - field_comparisons: Dict with Name, DOB, and Face matching diagnostics
-        - summary: str
+    Rejects comparing duplicate or same-category document types.
     """
+    base_type1 = get_base_doc_type(doc1_type)
+    base_type2 = get_base_doc_type(doc2_type)
+
+    # REJECT SAME DOCUMENT CATEGORY (e.g. PAN + PAN, or Aadhaar + Aadhaar)
+    if base_type1 and base_type2 and base_type1 == base_type2:
+        allowed_alternatives = [get_doc_title(t) for t in ["aadhaar", "pan", "driving_licence"] if t != base_type1]
+        allowed_str = " or ".join(allowed_alternatives)
+        return {
+            "overall_consistency_score": 0.0,
+            "consistency_status": "DOCUMENTS_MISMATCH",
+            "is_consistent": False,
+            "is_same_type_error": True,
+            "summary": (
+                f"Invalid Document Pair: Both uploaded documents are {get_doc_title(base_type1)}. "
+                f"Cross-verification requires a complementary document (Please upload {allowed_str})."
+            ),
+            "field_comparisons": {
+                "document_pair": {
+                    "doc1_value": get_doc_title(base_type1),
+                    "doc2_value": get_doc_title(base_type2),
+                    "similarity_score": 0.0,
+                    "status": "DUPLICATE_CATEGORY",
+                    "details": f"Cannot verify {get_doc_title(base_type1)} against another {get_doc_title(base_type2)}."
+                }
+            },
+            "doc1_type": doc1_type,
+            "doc2_type": doc2_type
+        }
+
     # 1. Name Check
     name1 = doc1_data.get("name") or doc1_data.get("holder_name") or doc1_data.get("cardholder_name")
     name2 = doc2_data.get("name") or doc2_data.get("holder_name") or doc2_data.get("cardholder_name")

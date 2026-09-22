@@ -59,6 +59,32 @@ export default function SecondIdVerificationModal({
     reader.readAsDataURL(selectedFile);
   };
 
+  const getBaseDocType = (type) => {
+    const t = (type || '').toLowerCase();
+    if (t.includes('aadhaar')) return 'aadhaar';
+    if (t.includes('pan')) return 'pan';
+    if (t.includes('driving') || t.includes('dl') || t.includes('licence') || t.includes('license')) return 'driving_licence';
+    return t;
+  };
+
+  const getDocLabel = (type) => {
+    const base = getBaseDocType(type);
+    const labels = {
+      aadhaar: 'Aadhaar Card',
+      pan: 'PAN Card',
+      driving_licence: 'Driving Licence'
+    };
+    return labels[base] || (type ? type.toUpperCase() : 'ID Document');
+  };
+
+  const getAllowedSecondTypes = (primaryType) => {
+    const base = getBaseDocType(primaryType);
+    if (base === 'pan') return ['Aadhaar Card', 'Driving Licence'];
+    if (base === 'aadhaar') return ['PAN Card', 'Driving Licence'];
+    if (base === 'driving_licence') return ['Aadhaar Card', 'PAN Card'];
+    return ['Aadhaar Card', 'PAN Card', 'Driving Licence'];
+  };
+
   const runCrossVerification = async () => {
     if (!file) return;
 
@@ -74,6 +100,18 @@ export default function SecondIdVerificationModal({
         throw new Error('The uploaded second document could not be recognized as a valid Indian ID card.');
       }
 
+      // Check for same document type rejection (e.g. PAN + PAN, or Aadhaar + Aadhaar)
+      const basePrimary = getBaseDocType(primaryDocumentType);
+      const baseSecond = getBaseDocType(secondDocRes.document_type);
+
+      if (basePrimary && baseSecond && basePrimary === baseSecond) {
+        const allowedStr = getAllowedSecondTypes(basePrimary).join(' or ');
+        throw new Error(
+          `Invalid Document Pair: Primary document is already a ${getDocLabel(basePrimary)}. ` +
+          `Cross-verification requires a complementary document. Please upload an ${allowedStr}.`
+        );
+      }
+
       // 2. Perform Cross-Verification against Primary ID
       const payload = {
         doc1_data: primaryData || {},
@@ -85,6 +123,11 @@ export default function SecondIdVerificationModal({
       };
 
       const crossResult = await verifySecondIdApi(payload);
+      
+      if (crossResult.is_same_type_error) {
+        throw new Error(crossResult.summary || 'Cannot compare duplicate document types.');
+      }
+
       setCrosscheckResult(crossResult);
 
       if (onVerificationComplete) {
@@ -99,22 +142,14 @@ export default function SecondIdVerificationModal({
       }
     } catch (err) {
       console.error('Cross verification error:', err);
-      setError(err.message || 'Failed to complete document cross-verification.');
+      const errMsg = err.response?.data?.detail || err.message || 'Failed to complete document cross-verification.';
+      setError(errMsg);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const getDocLabel = (type) => {
-    const labels = {
-      aadhaar: 'Aadhaar Card',
-      pan: 'PAN Card',
-      driving_licence: 'Driving Licence',
-      driving_licence_back: 'DL Back',
-      aadhaar_back: 'Aadhaar Back'
-    };
-    return labels[type] || (type ? type.toUpperCase() : 'ID Document');
-  };
+  const allowedTypes = getAllowedSecondTypes(primaryDocumentType);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -129,7 +164,7 @@ export default function SecondIdVerificationModal({
             <div>
               <h3 className="text-base font-bold text-slate-900">Second ID Verification</h3>
               <p className="text-xs text-slate-500">
-                Cross-match primary ID ({getDocLabel(primaryDocumentType)}) against a complementary ID
+                Primary ID: <strong className="text-slate-700">{getDocLabel(primaryDocumentType)}</strong> • Required: <strong className="text-emerald-700">{allowedTypes.join(' or ')}</strong>
               </p>
             </div>
           </div>
@@ -176,8 +211,11 @@ export default function SecondIdVerificationModal({
                       <p className="text-xs font-bold text-slate-800">
                         Upload Complementary ID Document
                       </p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">
-                        Supports Aadhaar Card, PAN Card, or Driving Licence (JPG, PNG)
+                      <div className="mt-1.5 inline-flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-800 text-[11px] font-bold">
+                        <span>Accepted: {allowedTypes.join(' or ')}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1.5">
+                        Cannot upload another {getDocLabel(primaryDocumentType)}. A different ID type is required.
                       </p>
                     </div>
                     <label className="inline-flex items-center space-x-2 px-4 py-2 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-xl text-xs font-bold shadow-sm cursor-pointer transition">
