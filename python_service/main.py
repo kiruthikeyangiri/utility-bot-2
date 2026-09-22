@@ -29,7 +29,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from schemas import FinalExtractionResult, UnsupportedDocumentData, ConfirmationRequest
+from schemas import (
+    FinalExtractionResult, 
+    UnsupportedDocumentData, 
+    ConfirmationRequest,
+    LiveFaceVerificationRequest,
+    SecondIdVerificationRequest
+)
 from preprocessing import (
     assess_image_quality, 
     preprocess_id_card, 
@@ -41,6 +47,9 @@ from document_classifier import classify_document_heuristics
 from llm_extractor import extract_document_info, get_available_models
 from validation import validate_and_clean_extraction
 from utils import pil_to_cv2, cv2_to_base64, logger
+from face_matching_service import compare_faces
+from liveness_service import evaluate_liveness, generate_liveness_challenge
+from document_crosscheck_service import cross_verify_documents
 from storage import (
     save_confirmed_verification, 
     save_extraction,
@@ -254,6 +263,94 @@ def revoke_public_reference_card(ref_id: str):
         raise HTTPException(status_code=404, detail="Reference card not found or already revoked.")
     return {"message": f"Reference ID {ref_id} has been revoked successfully.", "status": "REVOKED"}
 
+
+@app.get("/verify/liveness-challenge")
+def get_liveness_challenge():
+    """Generates an active randomized liveness challenge for camera verification."""
+    return generate_liveness_challenge()
+
+
+@app.post("/verify/live-face")
+def verify_live_face(
+    payload: LiveFaceVerificationRequest,
+    x_device_id: Optional[str] = Header(None, alias="X-Device-Id")
+):
+    """
+    Live Camera Face & Liveness Verification Endpoint:
+    1. Runs anti-spoofing liveness checks on live webcam selfie.
+    2. Extracts deep face embeddings and computes cosine similarity against ID card portrait crop.
+    3. Categorizes confidence into 3 calibrated tiers:
+       - STRONG_MATCH (>= 75%): Customer Identity Fully Verified (Status: VERIFIED)
+       - UNCERTAIN (50% - 74%): Moderate match, suggests Second ID Verification (Status: UNCERTAIN)
+       - WEAK (< 50%): Identity Mismatch / Face Verification Failed (Status: FAILED)
+    """
+    active_device = x_device_id or payload.deviceId or "default_client"
+
+    # 1. Evaluate Liveness / Anti-Spoofing
+    liveness_res = evaluate_liveness(
+        live_image_input=payload.live_selfie_image,
+        challenge_id=payload.challenge_id
+    )
+
+    if not liveness_res.get("is_live"):
+        return {
+            "status": "FAILED",
+            "verification_passed": False,
+            "overall_tier": "SPOOF_RISK",
+            "liveness": liveness_res,
+            "face_matching": {
+                "match_score": 0.0,
+                "match_tier": "WEAK",
+                "status": "FAILED",
+                "is_matched": False,
+                "explanation": "Liveness check failed. Anti-spoofing rejected presentation attack."
+            },
+            "summary": "Verification Failed: Liveness check rejected. Please ensure proper lighting and avoid digital screens."
+        }
+
+    # 2. Compare ID Portrait Face against Live Selfie
+    match_res = compare_faces(
+        id_portrait_input=payload.id_portrait_photo,
+        live_or_second_photo_input=payload.live_selfie_image
+    )
+
+    match_tier = match_res.get("match_tier", "WEAK")
+    verification_passed = (match_tier == "STRONG_MATCH")
+
+    final_status = "VERIFIED" if match_tier == "STRONG_MATCH" else ("UNCERTAIN" if match_tier == "UNCERTAIN" else "FAILED")
+
+    return {
+        "status": final_status,
+        "verification_passed": verification_passed,
+        "overall_tier": match_tier,
+        "liveness": liveness_res,
+        "face_matching": match_res,
+        "summary": match_res.get("explanation", "")
+    }
+
+
+@app.post("/verify/second-id")
+def verify_second_id_crosscheck(
+    payload: SecondIdVerificationRequest,
+    x_device_id: Optional[str] = Header(None, alias="X-Device-Id")
+):
+    """
+    Cross-checks First ID data & portrait against a Second ID document (Aadhaar, PAN, DL).
+    Computes fuzzy name match, normalized DOB match, and portrait face similarity.
+    Returns structured cross-verification report with status 'DOCUMENTS_CONSISTENT' or 'DOCUMENTS_MISMATCH'.
+    """
+    active_device = x_device_id or payload.deviceId or "default_client"
+
+    report = cross_verify_documents(
+        doc1_data=payload.doc1_data,
+        doc2_data=payload.doc2_data,
+        doc1_portrait=payload.doc1_portrait,
+        doc2_portrait=payload.doc2_portrait,
+        doc1_type=payload.doc1_type,
+        doc2_type=payload.doc2_type
+    )
+
+    return report
 
 
 @app.post("/extract", response_model=FinalExtractionResult)

@@ -215,3 +215,36 @@ export const revokeReferenceApi = async (refId) => {
   return response.data;
 };
 
+/**
+ * Fetches an active randomized liveness challenge.
+ */
+export const getLivenessChallengeApi = async () => {
+  const response = await api.get('/verify/liveness-challenge');
+  return response.data;
+};
+
+/**
+ * Submits live webcam selfie + ID portrait photo for liveness and face similarity verification.
+ */
+export const verifyLiveFaceApi = async (payload) => {
+  const data = {
+    ...payload,
+    deviceId: getDeviceId(),
+  };
+  const response = await api.post('/verify/live-face', data);
+  return response.data;
+};
+
+/**
+ * Submits primary ID details + secondary ID details for multi-document cross-verification.
+ */
+export const verifySecondIdApi = async (payload) => {
+  const data = {
+    ...payload,
+    deviceId: getDeviceId(),
+  };
+  const response = await api.post('/verify/second-id', data);
+  return response.data;
+};
+
+

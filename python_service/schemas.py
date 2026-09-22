@@ -145,3 +145,23 @@ class ConfirmationRequest(BaseModel):
     quality_report: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Quality report metrics")
     warnings: Optional[List[str]] = Field(default_factory=list, description="Validation warnings")
     deviceId: Optional[str] = Field("default_client", description="Client Device ID")
+
+
+class LiveFaceVerificationRequest(BaseModel):
+    """Request payload for live camera selfie verification against ID portrait."""
+    id_portrait_photo: str = Field(..., description="Base64 encoded cropped portrait photo from ID card")
+    live_selfie_image: str = Field(..., description="Base64 encoded live camera capture of applicant")
+    challenge_id: Optional[str] = Field(None, description="Optional active liveness challenge token")
+    deviceId: Optional[str] = Field("default_client", description="Client Device ID")
+
+
+class SecondIdVerificationRequest(BaseModel):
+    """Request payload for cross-verifying first ID data against a second uploaded ID document."""
+    doc1_data: Dict[str, Any] = Field(..., description="Extracted field values from primary ID")
+    doc1_portrait: Optional[str] = Field(None, description="Portrait photo from primary ID")
+    doc1_type: str = Field("aadhaar", description="Primary document type")
+    doc2_data: Dict[str, Any] = Field(..., description="Extracted field values from secondary ID")
+    doc2_portrait: Optional[str] = Field(None, description="Portrait photo from secondary ID")
+    doc2_type: str = Field("pan", description="Secondary document type")
+    deviceId: Optional[str] = Field("default_client", description="Client Device ID")
+
