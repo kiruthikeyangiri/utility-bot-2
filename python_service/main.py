@@ -19,12 +19,11 @@ except Exception:
     pass
 
 from typing import Optional, Dict, Any
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header, Query
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from PIL import Image
-import numpy as np
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -52,9 +51,8 @@ from liveness_service import evaluate_liveness, generate_liveness_challenge
 from document_crosscheck_service import cross_verify_documents
 from storage import (
     save_confirmed_verification, 
-    save_extraction,
     get_history, 
-    get_failed_history,
+    get_failed_history, 
     get_extraction_by_id, 
     delete_extraction_by_id, 
     get_storage_stats, 

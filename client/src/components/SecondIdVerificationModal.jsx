@@ -6,13 +6,11 @@ import {
   CheckCircle2, 
   XCircle, 
   AlertTriangle, 
-  ShieldCheck, 
   X, 
   Check, 
-  ArrowRight,
-  User,
-  Calendar,
-  Image as ImageIcon
+  User, 
+  Calendar, 
+  Image as ImageIcon 
 } from 'lucide-react';
 import { extractDocumentApi, verifySecondIdApi } from '../services/api';
 

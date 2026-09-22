@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import UploadZone from './components/UploadZone';
-import SettingsPanel from './components/SettingsPanel';
 import ResultsView from './components/ResultsView';
 import VisualPipeline from './components/VisualPipeline';
 import JsonViewer from './components/JsonViewer';

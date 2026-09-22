@@ -5,18 +5,10 @@ import {
   CheckCircle2, 
   XCircle, 
   AlertTriangle, 
-  ShieldCheck, 
-  UserCheck, 
   Scan, 
   X, 
   Eye, 
-  Smile, 
-  ArrowLeft, 
-  ArrowRight,
-  Sparkles, // NOTE: Not used, strictly using clean UI icons
-  Check,
-  Zap,
-  Activity
+  Check 
 } from 'lucide-react';
 import { getLivenessChallengeApi, verifyLiveFaceApi } from '../services/api';
 

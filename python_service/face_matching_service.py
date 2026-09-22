@@ -8,9 +8,8 @@ biometric face embedding extraction, cosine similarity calculation, and calibrat
 """
 
 import os
-import io
 import base64
-from typing import Tuple, Dict, Any, Optional
+from typing import Dict, Any, Optional
 import cv2
 import numpy as np
 
@@ -26,9 +25,7 @@ def get_sface_recognizer():
 
     model_candidates = [
         os.path.join(os.path.dirname(__file__), "face_recognition_sface.onnx"),
-        os.path.join(os.path.dirname(__file__), "sface2.onnx"),
-        "face_recognition_sface.onnx",
-        "sface2.onnx"
+        "face_recognition_sface.onnx"
     ]
 
     for path in model_candidates:

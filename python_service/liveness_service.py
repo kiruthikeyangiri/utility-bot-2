@@ -7,10 +7,9 @@ Detects presentation attacks (phone screens, printouts, masks, re-play attacks) 
 4. Active challenge generation (blink, smile, head movement).
 """
 
-import math
 import random
 import time
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import cv2
 import numpy as np
 

@@ -9,12 +9,8 @@ import {
   CheckCircle2, 
   XCircle, 
   AlertTriangle, 
-  ExternalLink,
-  User,
-  Fingerprint,
-  Calendar,
-  Eye,
-  Check
+  User, 
+  Eye 
 } from 'lucide-react';
 import { revokeReferenceApi } from '../services/api';
 
