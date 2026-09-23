@@ -87,10 +87,10 @@ def reduce_glare_and_background(image: np.ndarray) -> np.ndarray:
     return blended
 
 
-def remove_noise(image: np.ndarray, kernel_size: int = 3) -> np.ndarray:
+def remove_noise(image: np.ndarray, d: int = 5) -> np.ndarray:
     """Applies Bilateral filter to preserve text edges while removing background texture."""
     gray = to_grayscale(image)
-    return cv2.bilateralFilter(gray, d=5, sigmaColor=35, sigmaSpace=35)
+    return cv2.bilateralFilter(gray, d=d, sigmaColor=35, sigmaSpace=35)
 
 
 def apply_threshold(image: np.ndarray, method: str = "otsu") -> np.ndarray:
@@ -169,7 +169,6 @@ def get_yolo_face_model():
     if _yolo_face_model is not None:
         return _yolo_face_model
     try:
-        import os
         from ultralytics import YOLO
         model_path = os.path.join(os.path.dirname(__file__), "yolov8n-face.pt")
         if not os.path.exists(model_path):
@@ -200,7 +199,6 @@ def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = Non
         return None
 
     try:
-        import base64
         h, w = image.shape[:2]
         if h < 50 or w < 50:
             return None
@@ -292,7 +290,7 @@ def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = Non
                 continue
 
             valid_faces.sort(key=lambda x: x[0], reverse=True)
-            area, best_c, fx, fy, fw, fh = valid_faces[0]
+            area, _, fx, fy, fw, fh = valid_faces[0]
 
             pad_top = int(fh * 0.22)
             pad_bot = int(fh * 0.18)
