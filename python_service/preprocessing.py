@@ -4,7 +4,9 @@ Provides modular image enhancement functions to optimize OCR accuracy
 and assess image quality (blurriness, contrast).
 """
 
-from typing import Tuple, Dict, Any
+import os
+import base64
+from typing import Tuple, Dict, Any, Optional
 import cv2
 import numpy as np
 
