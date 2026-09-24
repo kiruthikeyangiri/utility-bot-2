@@ -120,6 +120,25 @@ def extract_face_crop(image: np.ndarray) -> Optional[np.ndarray]:
     return image
 
 
+def normalize_face_lighting(face_bgr: np.ndarray) -> np.ndarray:
+    """
+    Applies adaptive histogram equalization in LAB color space to normalize lighting
+    and contrast across low-light ID photos and over-exposed webcam frames.
+    """
+    if face_bgr is None or face_bgr.size == 0:
+        return face_bgr
+    try:
+        lab = cv2.cvtColor(face_bgr, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+        cl = clahe.apply(l)
+        limg = cv2.merge((cl, a, b))
+        enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+        return enhanced
+    except Exception:
+        return face_bgr
+
+
 def extract_face_embedding(face_img: np.ndarray) -> np.ndarray:
     """
     Computes a 128-dimensional normalized biometric feature vector using Deep SFace.
@@ -128,12 +147,16 @@ def extract_face_embedding(face_img: np.ndarray) -> np.ndarray:
         return np.zeros((1, 128), dtype=np.float32)
 
     # Standardize face image resolution for SFace input (112x112)
-    aligned_face = cv2.resize(face_img, (112, 112), interpolation=cv2.INTER_AREA)
+    normalized = normalize_face_lighting(face_img)
+    aligned_face = cv2.resize(normalized, (112, 112), interpolation=cv2.INTER_AREA)
 
     sface = get_sface_recognizer()
     if sface is not None:
         try:
             feature = sface.feature(aligned_face)
+            norm = np.linalg.norm(feature)
+            if norm > 1e-6:
+                feature = feature / norm
             return feature
         except Exception as e:
             print(f"[FaceMatching] SFace feature extraction error: {e}")

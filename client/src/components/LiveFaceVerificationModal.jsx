@@ -152,7 +152,7 @@ export default function LiveFaceVerificationModal({
       console.error('Verification error:', err);
       setVerificationResult({
         status: 'FAILED',
-        verification_passed: False,
+        verification_passed: false,
         overall_tier: 'WEAK',
         summary: 'Error communicating with face verification engine. Please try again.'
       });

@@ -69,8 +69,8 @@ def analyze_fft_frequency_texture(gray_face: np.ndarray) -> Dict[str, Any]:
     ratio = float(outer_energy / max(inner_energy, 1e-6))
     
     # Real 3D skin has smooth frequency roll-off; screens have repetitive high-frequency peaks
-    is_screen = ratio > 0.88 or ratio < 0.25
-    fft_score = max(0.0, min(100.0, (1.0 - abs(ratio - 0.58) / 0.35) * 100.0))
+    is_screen = ratio > 0.94 or ratio < 0.12
+    fft_score = max(0.0, min(100.0, (1.0 - abs(ratio - 0.50) / 0.45) * 100.0))
 
     return {
         "fft_score": round(float(fft_score), 1),
