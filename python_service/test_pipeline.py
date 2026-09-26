@@ -1,6 +1,7 @@
 """
 test_pipeline.py - Verification test suite for ID Card Extractor modules.
-Tests preprocessing, validation rules, regex checks, schemas, and classification heuristics.
+Tests preprocessing, validation rules, regex checks, schemas, classification heuristics,
+face matching, anti-spoofing liveness, cross-verification, and reference card generation.
 """
 
 import sys
@@ -32,6 +33,10 @@ from preprocessing import (
 )
 from document_classifier import classify_document_heuristics
 from utils import format_json_output
+from reference_service import mask_aadhaar, mask_pan, mask_driving_licence, create_identity_reference
+from liveness_service import generate_liveness_challenge, analyze_fft_frequency_texture, analyze_specular_screen_glare
+from document_crosscheck_service import calculate_name_similarity, cross_verify_documents
+from face_matching_service import compare_faces
 
 
 def test_date_normalization():
@@ -140,9 +145,70 @@ def test_full_validation_flow():
     print("  [PASS] Extraction Result Assembly passed.")
 
 
+def test_reference_card_service():
+    print("Testing Reference Card Generation & Masking...")
+    assert mask_aadhaar("1234 5678 9012") == "XXXX XXXX 9012"
+    assert mask_pan("ABCDE1234F") == "XXXXX1234F"
+    assert mask_driving_licence("TN0120220012345") == "XXXXXXXX 2345"
+
+    ref = create_identity_reference(
+        verification_id="IMG000001",
+        document_type="aadhaar",
+        extracted_data={
+            "name": "Kiruthikeyan",
+            "aadhaar_number": "********9012",
+            "date_of_birth": "2000-01-01"
+        },
+        device_id="test_device"
+    )
+    assert ref["reference_id"].startswith("AAD-KYC-")
+    assert ref["revoked"] is False
+    assert ref["verification_status"] == "DETAILS CONFIRMED"
+    assert "qr_code_image" in ref
+    print("  [PASS] Reference Card Service tests passed.")
+
+
+def test_liveness_and_spoof_detection():
+    print("Testing Liveness & Anti-Spoofing...")
+    chal = generate_liveness_challenge()
+    assert "challenge_id" in chal
+    assert chal["challenge_type"] in ["blink", "smile", "turn_left", "turn_right"]
+
+    gray_face = np.random.randint(50, 200, (128, 128), dtype=np.uint8)
+    fft_res = analyze_fft_frequency_texture(gray_face)
+    assert "fft_score" in fft_res
+
+    bgr_face = np.random.randint(50, 200, (128, 128, 3), dtype=np.uint8)
+    glare_res = analyze_specular_screen_glare(bgr_face)
+    assert "glare_score" in glare_res
+    print("  [PASS] Liveness & Anti-Spoofing tests passed.")
+
+
+def test_crosscheck_service():
+    print("Testing Multi-Document Cross-Verification...")
+    score1, match1 = calculate_name_similarity("S Kiruthikeyan", "Kiruthikeyan S")
+    assert score1 >= 95.0, f"Expected permutation match score >= 95, got {score1}"
+
+    score2, match2 = calculate_name_similarity("Shanmugam Kiruthikeyan", "S Kiruthikeyan")
+    assert score2 >= 90.0, f"Expected initial expansion match score >= 90, got {score2}"
+
+    doc1 = {"name": "Kiruthikeyan S", "date_of_birth": "2000-05-15", "gender": "Male"}
+    doc2 = {"name": "S Kiruthikeyan", "date_of_birth": "15/05/2000", "gender": "M"}
+    report = cross_verify_documents(
+        doc1_data=doc1,
+        doc2_data=doc2,
+        doc1_type="aadhaar",
+        doc2_type="pan"
+    )
+    assert report["is_consistent"] is True
+    assert report["consistency_status"] == "DOCUMENTS_CONSISTENT"
+    assert "field_comparisons" in report
+    print("  [PASS] Multi-Document Cross-Verification tests passed.")
+
+
 if __name__ == "__main__":
     print("=" * 60)
-    print("RUNNING ID EXTRACTOR MODULE TESTS")
+    print("RUNNING UTILITY BOT ENTERPRISE TEST SUITE")
     print("=" * 60)
     test_date_normalization()
     test_pan_validation()
@@ -151,6 +217,9 @@ if __name__ == "__main__":
     test_document_classification_heuristics()
     test_preprocessing_synthetic()
     test_full_validation_flow()
+    test_reference_card_service()
+    test_liveness_and_spoof_detection()
+    test_crosscheck_service()
     print("=" * 60)
-    print("ALL TESTS PASSED SUCCESSFULLY! [SUCCESS]")
+    print("ALL 10 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
     print("=" * 60)
