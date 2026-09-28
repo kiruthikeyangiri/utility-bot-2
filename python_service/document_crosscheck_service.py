@@ -254,9 +254,22 @@ def cross_verify_documents(
         face_status = "MATCH" if face_score >= 60.0 else "MISMATCH"
         face_details = face_res.get("explanation", "")
 
-    # 4. Weighted Consistency Score Calculation
-    # If face is available: Name (40%), DOB (30%), Face (30%)
-    # If face is not available: Name (60%), DOB (40%)
+    # 4. Count Matching Factors (Name, DOB, Face)
+    name_matched = bool(name_score >= 70.0 or name_status == "MATCH")
+    dob_matched = bool(dob_score >= 60.0 or dob_status in ["EXACT_MATCH", "YEAR_MATCH", "YEAR_MATCH_ONLY"])
+    face_matched = bool(face_score >= 60.0 and face_status == "MATCH" and doc1_portrait and doc2_portrait)
+
+    matched_factors = []
+    if name_matched:
+        matched_factors.append(f"Name ({name_score}%)")
+    if dob_matched:
+        matched_factors.append(f"DOB ({dob_desc})")
+    if face_matched:
+        matched_factors.append(f"Biometric Face ({face_score}%)")
+
+    matched_count = len(matched_factors)
+
+    # Weighted Consistency Score Calculation
     if doc1_portrait and doc2_portrait:
         consistency_score = (name_score * 0.40) + (dob_score * 0.30) + (face_score * 0.30)
     else:
@@ -264,25 +277,29 @@ def cross_verify_documents(
 
     consistency_score = round(float(consistency_score), 1)
 
-    is_consistent = (
-        consistency_score >= 75.0 and 
-        name_status == "MATCH" and 
-        dob_status in ["EXACT_MATCH", "YEAR_MATCH"]
-    )
+    # 2 or More Matching Factors -> APPROVE THE DOCUMENT
+    is_approved = bool(matched_count >= 2)
+    is_consistent = is_approved
 
-    status_str = "DOCUMENTS_CONSISTENT" if is_consistent else "DOCUMENTS_MISMATCH"
-
-    summary = (
-        f"Cross-Verification {'Passed' if is_consistent else 'Failed'}: "
-        f"Overall Consistency {consistency_score}%. "
-        f"Name: {name_match_desc} ({name_score}%). "
-        f"DOB: {dob_desc}."
-    )
+    if is_approved:
+        status_str = "DOCUMENTS_APPROVED"
+        approval_status = "APPROVED"
+        matched_str = ", ".join(matched_factors)
+        summary = f"Document Approved: {matched_count} matching verification factors confirmed ({matched_str}). Overall Consistency: {consistency_score}%."
+    else:
+        status_str = "DOCUMENTS_MISMATCH"
+        approval_status = "REJECTED"
+        matched_str = ", ".join(matched_factors) if matched_factors else "None"
+        summary = f"Approval Failed: Only {matched_count} factor matched ({matched_str}). Minimum 2 matching factors (Name, DOB, or Face) required to approve document."
 
     return {
         "overall_consistency_score": consistency_score,
         "consistency_status": status_str,
         "is_consistent": is_consistent,
+        "is_approved": is_approved,
+        "approval_status": approval_status,
+        "matched_factors_count": matched_count,
+        "matched_factors": matched_factors,
         "summary": summary,
         "field_comparisons": {
             "name": {

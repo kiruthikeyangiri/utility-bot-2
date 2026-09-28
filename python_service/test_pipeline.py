@@ -201,7 +201,9 @@ def test_crosscheck_service():
         doc2_type="pan"
     )
     assert report["is_consistent"] is True
-    assert report["consistency_status"] == "DOCUMENTS_CONSISTENT"
+    assert report["is_approved"] is True
+    assert report["approval_status"] == "APPROVED"
+    assert report["matched_factors_count"] >= 2
     assert "field_comparisons" in report
     print("  [PASS] Multi-Document Cross-Verification tests passed.")
 
