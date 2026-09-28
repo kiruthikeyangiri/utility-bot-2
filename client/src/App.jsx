@@ -51,7 +51,7 @@ export default function App() {
       setActiveTab('fields');
     } catch (err) {
       console.error('Extraction failed:', err);
-      const msg = err.response?.data?.error || err.message || 'Failed to extract document.';
+      const msg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Failed to extract document.';
       setErrorMessage(msg);
     } finally {
       setIsLoading(false);
