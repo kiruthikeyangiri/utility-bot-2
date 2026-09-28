@@ -165,3 +165,12 @@ class SecondIdVerificationRequest(BaseModel):
     doc2_type: str = Field("pan", description="Secondary document type")
     deviceId: Optional[str] = Field("default_client", description="Client Device ID")
 
+
+class BiometricVerificationRequest(BaseModel):
+    """Request payload for camera-based contactless biometric fingerprint verification."""
+    fingerprint_image: str = Field(..., description="Base64 encoded live camera capture of fingertip")
+    applicant_name: Optional[str] = Field(None, description="Applicant name from primary document")
+    id_number: Optional[str] = Field(None, description="Masked ID number from primary document")
+    deviceId: Optional[str] = Field("default_client", description="Client Device ID")
+
+

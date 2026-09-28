@@ -25,12 +25,14 @@ import {
   Scan, 
   UserCheck, 
   ArrowLeft, 
-  Edit3 
+  Edit3,
+  Fingerprint
 } from 'lucide-react';
 import { confirmVerificationApi } from '../services/api';
 import IdentityReferenceCard from './IdentityReferenceCard';
 import LiveFaceVerificationModal from './LiveFaceVerificationModal';
 import SecondIdVerificationModal from './SecondIdVerificationModal';
+import BiometricScanModal from './BiometricScanModal';
 
 export default function ResultsView({ result, onUploadAnother, onRetryScan, isRetrying }) {
   if (!result) return null;
@@ -67,6 +69,7 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
   const [verificationDetails, setVerificationDetails] = useState(null);
   const [isLiveFaceModalOpen, setIsLiveFaceModalOpen] = useState(false);
   const [isSecondIdModalOpen, setIsSecondIdModalOpen] = useState(false);
+  const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
 
   useEffect(() => {
     setFormData(data || {});
@@ -446,63 +449,92 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
             </button>
           </div>
 
-          {/* TWO MAIN VERIFICATION OPTIONS */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pt-1">
+          {/* THREE MAIN VERIFICATION OPTIONS */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4.5 pt-1">
             
             {/* OPTION 1: LIVE FACE VERIFICATION */}
-            <div className="p-6 rounded-3xl border border-indigo-100 bg-gradient-to-b from-indigo-50/40 via-white to-white shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4">
+            <div className="p-5.5 rounded-3xl border border-indigo-100 bg-gradient-to-b from-indigo-50/40 via-white to-white shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4">
               <div className="space-y-3">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20">
                   <Camera className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Option 1: Live Face Verification
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Option 1: Live Face
                   </h3>
                   <p className="text-xs text-slate-600 leading-relaxed mt-1">
-                    Live camera capture with active anti-spoofing liveness check & Deep SFace cosine similarity match against ID portrait.
+                    Live camera capture with active anti-spoofing liveness check & Deep SFace cosine similarity match.
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsLiveFaceModalOpen(true)}
-                className="w-full inline-flex items-center justify-center space-x-2 py-3 px-5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-indigo-600/25 transition cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                className="w-full inline-flex items-center justify-center space-x-1.5 py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/25 transition cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
               >
-                <Scan className="w-4 h-4" />
+                <Scan className="w-3.5 h-3.5" />
                 <span>
                   {identityStatus === 'VERIFIED' && verificationMethod === 'live_face' 
-                    ? 'Re-verify Live Face' 
-                    : 'Start Live Face Verification'}
+                    ? 'Re-verify Face' 
+                    : 'Start Face Verification'}
                 </span>
               </button>
             </div>
 
             {/* OPTION 2: UPLOAD ANOTHER ID DOCUMENT */}
-            <div className="p-6 rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/40 via-white to-white shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4">
+            <div className="p-5.5 rounded-3xl border border-emerald-100 bg-gradient-to-b from-emerald-50/40 via-white to-white shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4">
               <div className="space-y-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20">
                   <FileCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    Option 2: Upload Another ID Document
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Option 2: Second ID
                   </h3>
                   <p className="text-xs text-slate-600 leading-relaxed mt-1">
-                    Upload a complementary ID (Aadhaar / PAN / DL) for fuzzy name, normalized DOB, and biometric portrait cross-verification.
+                    Upload a complementary ID (Aadhaar / PAN / DL) for fuzzy name, DOB, and biometric cross-check.
                   </p>
                 </div>
               </div>
 
               <button
                 onClick={() => setIsSecondIdModalOpen(true)}
-                className="w-full inline-flex items-center justify-center space-x-2 py-3 px-5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-2xl text-xs font-bold shadow-md shadow-emerald-600/25 transition cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                className="w-full inline-flex items-center justify-center space-x-1.5 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/25 transition cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
               >
-                <FileCheck className="w-4 h-4" />
+                <FileCheck className="w-3.5 h-3.5" />
                 <span>
                   {identityStatus === 'VERIFIED' && verificationMethod === 'second_id' 
-                    ? 'Re-cross-check Second ID' 
-                    : 'Upload Another ID Document'}
+                    ? 'Re-cross-check ID' 
+                    : 'Upload Second ID'}
+                </span>
+              </button>
+            </div>
+
+            {/* OPTION 3: CONTACTLESS BIOMETRIC SCAN */}
+            <div className="p-5.5 rounded-3xl border border-teal-100 bg-gradient-to-b from-teal-50/40 via-white to-white shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white flex items-center justify-center shadow-md shadow-teal-600/20">
+                  <Fingerprint className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Option 3: Biometric Scan
+                  </h3>
+                  <p className="text-xs text-slate-600 leading-relaxed mt-1">
+                    Camera-based contactless fingertip scan with Gabor ridge filtering & ISO minutiae extraction.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsBiometricModalOpen(true)}
+                className="w-full inline-flex items-center justify-center space-x-1.5 py-2.5 px-4 bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-600/25 transition cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+              >
+                <Fingerprint className="w-3.5 h-3.5" />
+                <span>
+                  {identityStatus === 'VERIFIED' && verificationMethod === 'biometric_fingerprint' 
+                    ? 'Re-scan Biometrics' 
+                    : 'Start Biometric Scan'}
                 </span>
               </button>
             </div>
@@ -837,6 +869,15 @@ export default function ResultsView({ result, onUploadAnother, onRetryScan, isRe
         primaryDocumentType={document_type}
         primaryData={formData}
         primaryPortrait={portrait_photo}
+        onVerificationComplete={handleVerificationComplete}
+      />
+
+      {/* Contactless Biometric Fingerprint Scan Modal */}
+      <BiometricScanModal
+        isOpen={isBiometricModalOpen}
+        onClose={() => setIsBiometricModalOpen(false)}
+        applicantName={applicantName}
+        idNumber={formData?.pan_number || formData?.aadhaar_number || formData?.dl_number}
         onVerificationComplete={handleVerificationComplete}
       />
 
