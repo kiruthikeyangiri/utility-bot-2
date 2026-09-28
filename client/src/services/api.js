@@ -247,17 +247,4 @@ export const verifySecondIdApi = async (payload) => {
   return response.data;
 };
 
-/**
- * Submits camera-based contactless biometric fingerprint scan for ridge & minutiae verification.
- */
-export const verifyBiometricApi = async (payload) => {
-  const data = {
-    ...payload,
-    deviceId: getDeviceId(),
-  };
-  const response = await api.post('/verify/biometric', data);
-  return response.data;
-};
-
-
 

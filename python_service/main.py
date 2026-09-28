@@ -33,8 +33,7 @@ from schemas import (
     UnsupportedDocumentData, 
     ConfirmationRequest,
     LiveFaceVerificationRequest,
-    SecondIdVerificationRequest,
-    BiometricVerificationRequest
+    SecondIdVerificationRequest
 )
 from preprocessing import (
     assess_image_quality, 
@@ -50,7 +49,6 @@ from utils import pil_to_cv2, cv2_to_base64, logger
 from face_matching_service import compare_faces
 from liveness_service import evaluate_liveness, generate_liveness_challenge
 from document_crosscheck_service import cross_verify_documents
-from biometric_service import process_contactless_biometric_scan
 from storage import (
     save_confirmed_verification, 
     get_history, 
@@ -351,26 +349,6 @@ def verify_second_id_crosscheck(
     )
 
     return report
-
-
-@app.post("/verify/biometric")
-def verify_contactless_biometric(
-    payload: BiometricVerificationRequest,
-    x_device_id: Optional[str] = Header(None, alias="X-Device-Id")
-):
-    """
-    Camera-based Contactless Biometric Fingerprint Verification Endpoint:
-    1. Extracts distal fingertip pad region from live camera frame.
-    2. Enhances dermal epidermal ridges using green-channel extraction and Gabor filters.
-    3. Extracts ISO standard minutiae points (ridge endings & bifurcations).
-    4. Computes biometric quality score and returns structured verification report with visual ridge patterns.
-    """
-    res = process_contactless_biometric_scan(
-        image_input=payload.fingerprint_image,
-        applicant_name=payload.applicant_name,
-        id_number=payload.id_number
-    )
-    return res
 
 
 @app.post("/extract", response_model=FinalExtractionResult)
