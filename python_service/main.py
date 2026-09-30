@@ -62,13 +62,22 @@ from storage import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Pre-warm RapidOCR engine on startup."""
+    """Pre-warm RapidOCR engine and YOLO model on startup."""
     try:
         logger.info("Initializing and pre-warming RapidOCR ONNX engine...")
         get_ocr_reader()
         logger.info("RapidOCR engine initialized successfully.")
     except Exception as e:
         logger.warning(f"RapidOCR warmup warning: {e}")
+
+    try:
+        logger.info("Initializing and pre-warming YOLO Face model...")
+        from preprocessing import get_yolo_face_model
+        get_yolo_face_model()
+        logger.info("YOLO Face model initialized successfully.")
+    except Exception as e:
+        logger.warning(f"YOLO Face warmup warning: {e}")
+
     yield
 
 
@@ -352,7 +361,7 @@ def verify_second_id_crosscheck(
 
 
 @app.post("/extract", response_model=FinalExtractionResult)
-def extract_document(
+async def extract_document(
     file: UploadFile = File(...),
     min_confidence: float = Form(25.0),
     psm_mode: int = Form(11),
@@ -370,73 +379,169 @@ def extract_document(
     """
     Main extraction pipeline endpoint with Pre-LLM Decision Gate.
     1. Reads & validates uploaded image.
-    2. Runs quality & blur assessment.
-    3. Runs OpenCV preprocessing (or Deep Multi-Pass Scan if deep_scan=True).
-    4. Extracts portrait photo thumbnail.
-    5. Runs local OCR & draws bounding boxes.
+    2. Normalizes dimensions for memory safety (max 1600px).
+    3. Runs quality & blur assessment.
+    4. Runs OpenCV preprocessing (or Deep Multi-Pass Scan).
+    5. Runs local RapidOCR & draws bounding boxes.
     6. DECISION GATE: Evaluates document signatures. If unsupported, short-circuits immediately.
-    7. Calls Groq LLM or Pure OCR Regex Engine.
-    8. Validates & normalizes fields (Pydantic / Regex).
-    9. Returns structured JSON with status='Pending Confirmation'.
+    7. Extracts portrait photo thumbnail (YOLO Face / Morphological).
+    8. Calls Groq LLM or Pure OCR Regex Engine.
+    9. Validates & normalizes fields (Pydantic / Regex).
+    10. Returns structured JSON with status='Pending Confirmation'.
     """
-    # 1. Validate file format
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Uploaded file must be a valid image (JPG, JPEG, PNG).")
-
     try:
-        contents = file.file.read()
-        pil_image = Image.open(io.BytesIO(contents))
-        if pil_image.mode not in ("RGB", "L"):
-            pil_image = pil_image.convert("RGB")
-        cv2_orig = pil_to_cv2(pil_image)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to decode image: {str(e)}")
+        # 1. Validate file format
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="Uploaded file must be a valid image (JPG, JPEG, PNG).")
 
-    # 2. Image Quality & Blur Check
-    quality_report = assess_image_quality(cv2_orig)
+        try:
+            contents = await file.read()
+            pil_image = Image.open(io.BytesIO(contents))
+            if pil_image.mode not in ("RGB", "L"):
+                pil_image = pil_image.convert("RGB")
+            cv2_orig = pil_to_cv2(pil_image)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to decode image: {str(e)}")
 
-    # 3. Portrait Face Crop Extraction
-    portrait_photo = extract_portrait_photo(cv2_orig)
+        # 1.1 Memory-Safe Dimension Normalization (Max dimension 1600px)
+        h, w = cv2_orig.shape[:2]
+        max_dim = 1600
+        if max(h, w) > max_dim:
+            scale = max_dim / float(max(h, w))
+            cv2_orig = cv2.resize(cv2_orig, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
 
-    # 4. OpenCV Preprocessing (Standard vs. Deep Multi-Pass)
-    if deep_scan:
-        logger.info("[Vision Pipeline] Running High-Accuracy Deep Multi-Pass scan...")
-        cv2_preprocessed = preprocess_deep_multi_pass(cv2_orig)
-    else:
-        cv2_preprocessed = preprocess_id_card(
-            cv2_orig,
-            enable_resize=True,
-            enable_clahe=enable_clahe,
-            enable_denoise=enable_denoise,
-            enable_glare_reduction=enable_glare,
-            enable_threshold=enable_threshold,
-            threshold_method=threshold_method
+        # 2. Image Quality & Blur Check
+        quality_report = assess_image_quality(cv2_orig)
+
+        # 3. OpenCV Preprocessing (Standard vs. Deep Multi-Pass)
+        if deep_scan:
+            logger.info("[Vision Pipeline] Running High-Accuracy Deep Multi-Pass scan...")
+            cv2_preprocessed = preprocess_deep_multi_pass(cv2_orig)
+        else:
+            cv2_preprocessed = preprocess_id_card(
+                cv2_orig,
+                enable_resize=True,
+                enable_clahe=enable_clahe,
+                enable_denoise=enable_denoise,
+                enable_glare_reduction=enable_glare,
+                enable_threshold=enable_threshold,
+                threshold_method=threshold_method
+            )
+
+        # 4. RapidOCR with Bounding Boxes (Free & Local)
+        try:
+            ocr_result = extract_ocr_data(
+                cv2_preprocessed,
+                min_confidence=min_confidence,
+                psm_mode=psm_mode
+            )
+            cv2_annotated = draw_bounding_boxes(cv2_orig, ocr_result, show_confidence=True)
+        except Exception as e:
+            logger.error(f"OCR Error: {e}")
+            raise HTTPException(status_code=500, detail=f"OCR Processing failed: {str(e)}")
+
+        # Encode images for visual pipeline (optimized JPEG quality for fast transmission)
+        pipeline_images = {
+            "original": cv2_to_base64(cv2_orig, quality=75),
+            "preprocessed": cv2_to_base64(cv2_preprocessed, quality=75),
+            "annotated": cv2_to_base64(cv2_annotated, quality=80)
+        }
+
+        # If no readable text was detected at all
+        if ocr_result.word_count == 0 or not ocr_result.raw_text.strip():
+            unsupported = UnsupportedDocumentData(
+                document_type="unsupported",
+                error="No readable text detected in the image. Please verify lighting and focus."
+            )
+            return FinalExtractionResult(
+                document_type="unsupported",
+                is_valid=False,
+                status="Pending Confirmation",
+                short_circuited=True,
+                data=unsupported,
+                warnings=["No text detected by OCR engine."],
+                ocr_confidence=0.0,
+                raw_ocr_text="",
+                quality_report=quality_report,
+                images=pipeline_images,
+                portrait_photo=None
+            )
+
+        # 5. DECISION GATE: Heuristic Type Check (Pre-LLM Resource Gate)
+        heuristic_type, heuristic_conf, heuristic_scores = classify_document_heuristics(ocr_result.raw_text)
+        
+        # 6. Portrait Face Crop Extraction (Only Once, Type-Aware)
+        portrait_photo = None
+        if heuristic_type not in ["aadhaar_back", "pan_back", "driving_licence_back", "unsupported"]:
+            try:
+                portrait_photo = extract_portrait_photo(cv2_orig, doc_type_hint=heuristic_type)
+            except Exception as face_err:
+                logger.warning(f"Face extraction notice: {face_err}")
+                portrait_photo = None
+
+        # If the document shows NO resemblance to Aadhaar, PAN, or DL, short-circuit immediately
+        if heuristic_type == "unsupported" and max(heuristic_scores.values()) == 0:
+            logger.info("[Decision Gate] Document rejected before LLM call. Zero ID keywords found.")
+            unsupported = UnsupportedDocumentData(
+                document_type="unsupported",
+                error="Decision Gate: Document does not match Indian Aadhaar, PAN, or Driving Licence patterns. LLM processing skipped."
+            )
+            return FinalExtractionResult(
+                document_type="unsupported",
+                is_valid=False,
+                status="Pending Confirmation",
+                short_circuited=True,
+                data=unsupported,
+                warnings=["Rejected by Pre-LLM Decision Gate (Non-ID document detected)."],
+                ocr_confidence=ocr_result.average_confidence,
+                raw_ocr_text=ocr_result.raw_text,
+                quality_report=quality_report,
+                images=pipeline_images,
+                portrait_photo=None
+            )
+
+        # 7. Groq LLM API Call (Only for supported IDs)
+        heuristic_hint_str = f"Found pattern matching for: {heuristic_type.upper()}" if heuristic_type != "unsupported" else None
+        
+        raw_llm_json, llm_error = extract_document_info(
+            ocr_raw_text=ocr_result.raw_text,
+            ocr_layout_text=ocr_result.layout_text,
+            api_key=groq_api_key,
+            model_name=model_name,
+            heuristic_hint=heuristic_hint_str
         )
 
-    # 5. RapidOCR with Bounding Boxes (Free & Local)
-    try:
-        ocr_result = extract_ocr_data(
-            cv2_preprocessed,
-            min_confidence=min_confidence,
-            psm_mode=psm_mode
+        detected_doc_type = raw_llm_json.get("document_type") or heuristic_type
+        if raw_llm_json.get("document_type") == "unsupported" and heuristic_type != "unsupported":
+            raw_llm_json["document_type"] = heuristic_type
+            detected_doc_type = heuristic_type
+
+        # Re-evaluate portrait photo if doc type was refined or back side detected
+        if detected_doc_type in ["aadhaar_back", "pan_back", "driving_licence_back", "unsupported"]:
+            portrait_photo = None
+        elif not portrait_photo:
+            portrait_photo = extract_portrait_photo(cv2_orig, doc_type_hint=detected_doc_type)
+
+        # 8. Post-Validation and Pydantic Normalization
+        final_result = validate_and_clean_extraction(
+            raw_data=raw_llm_json,
+            ocr_confidence=ocr_result.average_confidence,
+            raw_ocr_text=ocr_result.raw_text,
+            quality_report=quality_report,
+            images=pipeline_images,
+            short_circuited=False,
+            portrait_photo=portrait_photo
         )
-        cv2_annotated = draw_bounding_boxes(cv2_orig, ocr_result, show_confidence=True)
-    except Exception as e:
-        logger.error(f"OCR Error: {e}")
-        raise HTTPException(status_code=500, detail=f"OCR Processing failed: {str(e)}")
 
-    # Encode images for visual pipeline
-    pipeline_images = {
-        "original": cv2_to_base64(cv2_orig, quality=80),
-        "preprocessed": cv2_to_base64(cv2_preprocessed, quality=80),
-        "annotated": cv2_to_base64(cv2_annotated, quality=85)
-    }
+        return final_result
 
-    # If no readable text was detected at all
-    if ocr_result.word_count == 0 or not ocr_result.raw_text.strip():
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"[Extract Exception] {exc}", exc_info=True)
         unsupported = UnsupportedDocumentData(
             document_type="unsupported",
-            error="No readable text detected in the image. Please verify lighting and focus."
+            error=f"Processing failed: {str(exc)}"
         )
         return FinalExtractionResult(
             document_type="unsupported",
@@ -444,76 +549,13 @@ def extract_document(
             status="Pending Confirmation",
             short_circuited=True,
             data=unsupported,
-            warnings=["No text detected by OCR engine."],
+            warnings=[f"Error during extraction: {str(exc)}"],
             ocr_confidence=0.0,
             raw_ocr_text="",
-            quality_report=quality_report,
-            images=pipeline_images,
-            portrait_photo=portrait_photo
-        )
-
-    # 6. DECISION GATE: Heuristic Type Check (Pre-LLM Resource Gate)
-    heuristic_type, heuristic_conf, heuristic_scores = classify_document_heuristics(ocr_result.raw_text)
-    
-    # 6.1 Portrait Face Crop Extraction (Aware of Doc Type: Right side for DL/Aadhaar, Left side for PAN)
-    portrait_photo = extract_portrait_photo(cv2_orig, doc_type_hint=heuristic_type)
-
-    # If the document shows NO resemblance to Aadhaar, PAN, or DL, short-circuit immediately
-    if heuristic_type == "unsupported" and max(heuristic_scores.values()) == 0:
-        logger.info("[Decision Gate] Document rejected before LLM call. Zero ID keywords found.")
-        unsupported = UnsupportedDocumentData(
-            document_type="unsupported",
-            error="Decision Gate: Document does not match Indian Aadhaar, PAN, or Driving Licence patterns. LLM processing skipped."
-        )
-        res = FinalExtractionResult(
-            document_type="unsupported",
-            is_valid=False,
-            status="Pending Confirmation",
-            short_circuited=True,
-            data=unsupported,
-            warnings=["Rejected by Pre-LLM Decision Gate (Non-ID document detected)."],
-            ocr_confidence=ocr_result.average_confidence,
-            raw_ocr_text=ocr_result.raw_text,
-            quality_report=quality_report,
-            images=pipeline_images,
+            quality_report={"blur_score": 0.0, "is_blurry": False, "width": 0, "height": 0, "is_too_small": False},
+            images={"original": "", "preprocessed": "", "annotated": ""},
             portrait_photo=None
         )
-        return res
-
-    # 7. Groq LLM API Call (Only for supported IDs)
-    heuristic_hint_str = f"Found pattern matching for: {heuristic_type.upper()}" if heuristic_type != "unsupported" else None
-    
-    raw_llm_json, llm_error = extract_document_info(
-        ocr_raw_text=ocr_result.raw_text,
-        ocr_layout_text=ocr_result.layout_text,
-        api_key=groq_api_key,
-        model_name=model_name,
-        heuristic_hint=heuristic_hint_str
-    )
-
-    detected_doc_type = raw_llm_json.get("document_type") or heuristic_type
-    if raw_llm_json.get("document_type") == "unsupported" and heuristic_type != "unsupported":
-        raw_llm_json["document_type"] = heuristic_type
-        detected_doc_type = heuristic_type
-
-    # Re-evaluate portrait photo if doc type was refined or back side detected
-    if detected_doc_type in ["aadhaar_back", "pan_back", "driving_licence_back", "unsupported"]:
-        portrait_photo = None
-    elif not portrait_photo:
-        portrait_photo = extract_portrait_photo(cv2_orig, doc_type_hint=detected_doc_type)
-
-    # 8. Post-Validation and Pydantic Normalization
-    final_result = validate_and_clean_extraction(
-        raw_data=raw_llm_json,
-        ocr_confidence=ocr_result.average_confidence,
-        raw_ocr_text=ocr_result.raw_text,
-        quality_report=quality_report,
-        images=pipeline_images,
-        short_circuited=False,
-        portrait_photo=portrait_photo
-    )
-
-    return final_result
 
 
 # -----------------------------------------------------------------------------

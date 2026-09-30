@@ -210,7 +210,7 @@ def extract_portrait_photo(image: np.ndarray, doc_type_hint: Optional[str] = Non
         # =========================================================================
         yolo = get_yolo_face_model()
         if yolo is not None:
-            results = yolo(image, conf=0.25, verbose=False)
+            results = yolo(image, conf=0.25, verbose=False, imgsz=640, device="cpu")
             boxes = results[0].boxes
             if len(boxes) > 0:
                 best_box = None

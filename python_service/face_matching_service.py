@@ -78,7 +78,7 @@ def extract_face_crop(image: np.ndarray) -> Optional[np.ndarray]:
         from preprocessing import get_yolo_face_model
         yolo = get_yolo_face_model()
         if yolo is not None:
-            results = yolo(image, conf=0.18, verbose=False)
+            results = yolo(image, conf=0.18, verbose=False, imgsz=640, device="cpu")
             boxes = results[0].boxes
             if len(boxes) > 0:
                 best_box = None
