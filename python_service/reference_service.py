@@ -10,7 +10,7 @@ import secrets
 import qrcode
 import io
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -164,7 +164,7 @@ def create_identity_reference(
         or "Applicant"
     )
 
-    now = datetime.utcnow().isoformat() + "Z"
+    now = datetime.now(timezone.utc).isoformat()
     
     # Doc type display name
     doc_display_names = {
@@ -230,7 +230,7 @@ def revoke_reference_by_id(ref_id: str) -> bool:
     for rec in records:
         if rec.get("reference_id") == ref_id:
             rec["revoked"] = True
-            rec["revoked_at"] = datetime.utcnow().isoformat() + "Z"
+            rec["revoked_at"] = datetime.now(timezone.utc).isoformat()
             rec["verification_status"] = "REVOKED"
             found = True
             break
@@ -246,7 +246,7 @@ def revoke_reference_by_id(ref_id: str) -> bool:
                         "$set": {
                             "revoked": True, 
                             "verification_status": "REVOKED",
-                            "revoked_at": datetime.utcnow().isoformat() + "Z"
+                            "revoked_at": datetime.now(timezone.utc).isoformat()
                         }
                     }
                 })

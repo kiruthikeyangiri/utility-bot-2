@@ -9,7 +9,7 @@ With 30-Day Auto-Retention, Photo Thumbnails & Device Privacy Isolation.
 import os
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -193,7 +193,7 @@ def read_file_records(file_path: str, auto_purge: bool = True) -> List[Dict[str,
         data = []
 
     if auto_purge and data:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         valid_records = []
         has_expired = False
         for doc in data:
@@ -268,7 +268,7 @@ def save_confirmed_verification(
     elif hasattr(clean_data, "model_dump"):
         clean_data = clean_data.model_dump()
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=RETENTION_DAYS)
 
     record = {
