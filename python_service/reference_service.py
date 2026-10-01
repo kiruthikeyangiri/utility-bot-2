@@ -11,7 +11,7 @@ import qrcode
 import io
 import base64
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 REFERENCES_FILE = os.path.join(DATA_DIR, "references.json")
@@ -124,7 +124,7 @@ def generate_qr_code_base64(reference_id: str, qr_token: str) -> str:
     return f"data:image/png;base64,{b64_str}"
 
 
-def read_reference_records() -> list:
+def read_reference_records() -> List[Dict[str, Any]]:
     """Reads all stored reference cards from local storage."""
     try:
         with open(REFERENCES_FILE, "r", encoding="utf-8") as f:
@@ -133,7 +133,7 @@ def read_reference_records() -> list:
         return []
 
 
-def write_reference_records(records: list) -> None:
+def write_reference_records(records: List[Dict[str, Any]]) -> None:
     """Saves reference cards to local storage."""
     try:
         with open(REFERENCES_FILE, "w", encoding="utf-8") as f:
