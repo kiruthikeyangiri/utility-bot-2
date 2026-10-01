@@ -209,12 +209,36 @@ GROQ_MODEL=llama-3.3-70b-versatile
 ## 🚀 Quickstart Guide
 
 ### **Prerequisites**
-- **Python 3.10+**
+- **Python 3.10+** (Fully compatible with Python 3.10 - 3.14+)
 - **Node.js 18+** & **npm**
 
 ---
 
-### **Option 1: Development Mode (2 Terminals)**
+### **Option 1: Fastest Root Launch (Single Command)**
+
+Launch the full stack directly from the workspace root (serves both React GUI & FastAPI backend on port 8000):
+
+```powershell
+# 1. Install dependencies
+pip install -r python_service/requirements.txt
+
+# 2. Run the unified server
+python run.py
+```
+
+*Alternatively, run with Uvicorn auto-reload from the root:*
+```powershell
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+- **Unified Web Dashboard:** `http://localhost:8000`
+- **Interactive Swagger Docs:** `http://localhost:8000/docs`
+
+---
+
+### **Option 2: Development Mode (Hot-Reloading 2 Terminals)**
+
+Use this mode when actively developing the React frontend:
 
 #### **Terminal 1: Start Backend (FastAPI)**
 ```powershell
@@ -223,7 +247,7 @@ pip install -r requirements.txt
 python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 - **Backend API:** `http://localhost:8000`
-- **Interactive Swagger Docs:** `http://localhost:8000/docs`
+- **Swagger Docs:** `http://localhost:8000/docs`
 
 #### **Terminal 2: Start Frontend (React + Vite)**
 ```powershell
@@ -233,24 +257,32 @@ npm run dev
 ```
 - **Web Dashboard:** `http://localhost:5173`
 
+*(On Windows, you can also double-click `run-dev.bat` to launch both terminals automatically).*
+
 ---
 
-### **Option 2: Unified Production Server (1 Terminal)**
+### **Option 3: Docker Deployment (Railway, Render, AWS, GCP)**
 
-Build the React frontend into static assets and serve both frontend and backend through FastAPI:
+Utility Bot includes a production multi-stage `Dockerfile`:
 
 ```powershell
-# 1. Build the React Client
-cd client
-npm install
-npm run build
+# Build container image
+docker build -t utility-bot .
 
-# 2. Start the Unified Server
-cd ../python_service
-pip install -r requirements.txt
-python main.py
+# Run container (port 8000)
+docker run -p 8000:8000 utility-bot
 ```
-- Open `http://localhost:8000` in your browser.
+
+---
+
+### 🧪 Running Automated Tests
+
+Run the full 10-module test suite to verify OCR, validation rules, biometrics, and cross-checks:
+
+```powershell
+python python_service/test_pipeline.py
+```
+*Expected Output: `ALL 10 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]`*
 
 ---
 
