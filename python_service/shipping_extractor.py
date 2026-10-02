@@ -112,6 +112,8 @@ def _clean_spaces(text: str) -> str:
          'WAREHOUSE2' -> 'WAREHOUSE 2'
          '11919WINKRD' -> '11919 WINK RD'
          '321StreetOverThere' -> '321 Street Over There'
+         '12thcross' -> '12th cross'
+         '1stsector' -> '1st sector'
     """
     if not text:
         return text
@@ -120,24 +122,53 @@ def _clean_spaces(text: str) -> str:
     if re.search(r"^\d{10,}$", text) or "@" in text or "http" in text or text.startswith("//"):
         return text
 
-    # Insert space between lower case and Upper case (CamelCase: JohnDoe -> John Doe)
+    # Split CamelCase: JohnDoe -> John Doe, StreetOverThere -> Street Over There
     s = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
 
-    # Insert space between number and letter (except ordinals like 1st, 2nd, 3rd, 4th, etc.)
-    # 11919WINK -> 11919 WINK, 321Street -> 321 Street
-    # But preserve 1st, 2nd, 3rd, 12th
-    s = re.sub(r"(\d+)(?!(?:st|nd|rd|th)\b)([A-Za-z])", r"\1 \2", s, flags=re.IGNORECASE)
+    # Split 1-2 digit ordinals attached to address words (e.g. 12thcross -> 12th cross, 1stsector -> 1st sector, 2ndfloor -> 2nd floor)
+    s = re.sub(r"\b([1-9][0-9]?(?:st|nd|rd|th))(cross|main|sector|floor|block|street|road|rd|st|ave|lane|phase|stage|building|flat|plot|nagar|colony|side)\b", r"\1 \2", s, flags=re.IGNORECASE)
 
-    # Insert space between letter and number (except if already separated)
-    # WAREHOUSE2 -> WAREHOUSE 2
+    # Split attached digits and letters (e.g. 11919WINK -> 11919 WINK, 321Street -> 321 Street)
+    def _split_digits_letters(m):
+        digits, letters = m.group(1), m.group(2)
+        if re.fullmatch(r"[1-9][0-9]?(?:st|nd|rd|th)", digits + letters, re.IGNORECASE):
+            return digits + letters
+        return digits + " " + letters
+
+    s = re.sub(r"(\d+)([A-Za-z]+)", _split_digits_letters, s)
+
+    # Split letter and digits: WAREHOUSE2 -> WAREHOUSE 2
     s = re.sub(r"([A-Za-z])(\d+)", r"\1 \2", s)
 
-    # Common street suffix splits if joined like WINKRD -> WINK RD, MAINAVE -> MAIN AVE, etc.
-    s = re.sub(r"([A-Za-z]{3,})(RD|ST|AVE|BLVD|DR|LN|WAY|PKWY|HWY|CT|CIR)\b", r"\1 \2", s, flags=re.IGNORECASE)
+    # Split uppercase street suffixes: WINKRD -> WINK RD, MAINAVE -> MAIN AVE
+    s = re.sub(r"\b([A-Z]{3,})(RD|AVE|BLVD|DR|LN|WAY|PKWY|HWY|CIR)\b", r"\1 \2", s)
 
-    # Normalize multiple spaces
     s = re.sub(r"\s+", " ", s).strip()
     return s
+
+
+def _is_table_header(line: str) -> bool:
+    """Checks if a line is a table header for products/manifest."""
+    l_upper = line.upper().strip()
+    if re.search(r"\b(?:PRODUCT|ITEM\s*DESCRIPTION)\b", l_upper) and re.search(r"\b(?:PRICE|TOTAL|QTY|RATE|AMOUNT)\b", l_upper):
+        return True
+    if re.search(r"\b(?:PRICE|TOTAL)\s*\([A-Z]+\)", l_upper):
+        return True
+    return False
+
+
+def _is_table_or_payment_line(line: str) -> bool:
+    """Checks if a line contains table headers, pricing data, or payment types."""
+    l_upper = line.upper().strip()
+    if re.search(r"\b(?:PREPAID|PRE-PAID|COD|CASH\s*ON\s*DELIVERY)\b", l_upper):
+        return True
+    if re.search(r"\b(?:PRICE|TOTAL|QTY|QUANTITY|AMOUNT|TAX|HSN|SKU|GST|INR|SUBTOTAL)\b", l_upper) and (re.search(r"[\d\(\)\|]", line) or "TOTAL" in l_upper or "PRICE" in l_upper):
+        return True
+    if re.search(r"\b(?:PRODUCT|ITEM\s*DESCRIPTION)\b", l_upper) and re.search(r"\b(?:PRICE|TOTAL|QTY|RATE|AMOUNT)\b", l_upper):
+        return True
+    if re.search(r"^[A-Za-z0-9\s\-]+(?:\s+\d+(?:\.\d+)?){2,}\s*$", line):
+        return True
+    return False
 
 
 def _is_valid_phone(text: str) -> bool:
@@ -208,8 +239,10 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
         l_str = l.strip()
         if not l_str:
             continue
-        # Skip postage or tracking lines inside address block
+        # Skip postage, tracking, payment, or table lines inside address block
         if _is_postage_line(l_str):
+            continue
+        if _is_table_or_payment_line(l_str):
             continue
         if re.search(r"\b(?:USPSTRACKING|TRACKING|BARCODE)\b", l_str, re.IGNORECASE):
             continue
@@ -222,14 +255,20 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
     while idx < len(cleaned_lines):
         line_clean = cleaned_lines[idx].strip()
 
-        # 1. Email check
+        # 1. Strip address label prefixes like "Add:", "Addr:", "Address:"
+        line_clean = re.sub(r"^(?:ADD|ADDR|ADDRESS|DELIVERY ADDRESS|SHIPPING ADDRESS|SHIP TO|SHIP FROM|RETURN ADDRESS)\s*[:\-]?", "", line_clean, flags=re.IGNORECASE).strip()
+        if not line_clean:
+            idx += 1
+            continue
+
+        # 2. Email check
         if not contact["email"]:
             em = _extract_email(line_clean)
             if em:
                 contact["email"] = em
                 line_clean = line_clean.replace(em, "").strip()
 
-        # 2. Phone check
+        # 3. Phone check
         if "PHONE" in line_clean.upper() or "MOB" in line_clean.upper() or "TEL" in line_clean.upper():
             ph = _extract_phone(line_clean)
             if ph:
@@ -248,7 +287,7 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
                 idx += 1
                 continue
 
-        # 3. Country check
+        # 4. Country check
         if re.search(r"\b(?:UNITED\s*STATES|USA|U\.S\.A\.|US)\b", line_clean, re.IGNORECASE):
             contact["country"] = "United States"
             line_clean = re.sub(r"\b(?:UNITED\s*STATES|USA|U\.S\.A\.|US)\b", "", line_clean, flags=re.IGNORECASE).strip()
@@ -256,7 +295,7 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
             contact["country"] = "India"
             line_clean = re.sub(r"\b(?:INDIA|IND|BHARAT)\b", "", line_clean, flags=re.IGNORECASE).strip()
 
-        # 4. US City, State, ZIP patterns:
+        # 5. US City, State, ZIP patterns:
         # Pattern A: Standard spaced e.g. "Salt Lake City, UT 11212" or "HOUSTON TX 77024-7134"
         m_csz = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Za-z]{2})\s+([0-9]{5}(?:-[0-9]{4})?)$", line_clean)
         if m_csz and m_csz.group(2).upper() in US_STATES:
@@ -296,14 +335,14 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
             idx += 1
             continue
 
-        # 5. Postal / PIN Code check
+        # 6. Postal / PIN Code check
         if not contact["postal_code"]:
             m_pin = re.search(r"\b(?:PIN|PINCODE|PIN\s*CODE|ZIP|POSTAL)?\s*[:\-]?\s*([1-9][0-9]{4,5}(?:-[0-9]{4})?)\b", line_clean, re.IGNORECASE)
             if m_pin:
                 contact["postal_code"] = m_pin.group(1)
                 line_clean = re.sub(r"(?:PIN|PINCODE|PIN\s*CODE|ZIP|POSTAL)?\s*[:\-]?\s*" + re.escape(m_pin.group(1)), "", line_clean, flags=re.IGNORECASE).strip()
 
-        # 6. Indian State check
+        # 7. Indian State check
         if not contact["state"]:
             upper_line = line_clean.upper()
             for st in INDIAN_STATES:
@@ -311,16 +350,19 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
                     contact["state"] = st.title()
                     if not contact["country"]:
                         contact["country"] = "India"
+                    line_clean = re.sub(r"\b" + re.escape(st) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
                     break
             if not contact["state"]:
                 for abbr, full_state in STATE_ABBRS.items():
-                    if re.search(r"\b" + abbr + r"\b", upper_line):
+                    if re.search(r"(?:,\s*|\b)" + re.escape(abbr) + r"\b", upper_line):
                         contact["state"] = full_state
                         if not contact["country"]:
                             contact["country"] = "India"
+                        line_clean = re.sub(r"(?:,\s*|\b)" + re.escape(abbr) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
                         break
 
         cleaned_str = _clean_spaces(line_clean)
+        cleaned_str = re.sub(r"^[,\s\-]+|[,\s\-]+$", "", cleaned_str).strip()
         if cleaned_str and cleaned_str not in [":", "-", ",", "."]:
             address_parts.append(cleaned_str)
 
@@ -340,7 +382,12 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
 
     # Construct overall address string
     if address_parts:
-        contact["address"] = ", ".join(address_parts)
+        raw_addr = ", ".join(address_parts)
+        raw_addr = re.sub(r"^[,\s\-]+|[,\s\-]+$", "", raw_addr).strip()
+        raw_addr = re.sub(r"\s*,\s*,\s*", ", ", raw_addr)
+        raw_addr = re.sub(r"\s*-\s*,\s*", ", ", raw_addr)
+        raw_addr = re.sub(r"\s*,\s*-\s*", ", ", raw_addr)
+        contact["address"] = raw_addr or None
 
     return contact
 
@@ -432,7 +479,12 @@ def extract_shipping_label_data(
     from_lines: List[str] = []
 
     if has_explicit_to or has_explicit_from:
-        current_section = None
+        if has_explicit_to and not has_explicit_from:
+            current_section = "FROM"
+        elif has_explicit_from and not has_explicit_to:
+            current_section = "TO"
+        else:
+            current_section = None
         for line in lines:
             if re.search(TO_HEADER_PATTERN, line, re.IGNORECASE):
                 current_section = "TO"
@@ -446,7 +498,7 @@ def extract_shipping_label_data(
                 continue
 
             # Section breakers
-            if any(kw in line.upper() for kw in ["ORDER ID", "TRACKING", "AWB", "INVOICE", "PACKAGE WEIGHT", "TOTAL AMOUNT"]):
+            if any(kw in line.upper() for kw in ["ORDER ID", "TRACKING", "AWB", "INVOICE", "PACKAGE WEIGHT", "TOTAL AMOUNT"]) or _is_table_header(line):
                 current_section = None
 
             if current_section == "TO":
@@ -457,7 +509,7 @@ def extract_shipping_label_data(
         # Layout-free partition for USPS, FedEx, UPS labels without explicit "SHIP TO" text
         current_section = "FROM"
         for line in lines:
-            if _is_postage_line(line):
+            if _is_postage_line(line) or _is_table_header(line):
                 continue
             # Order line delimiter switches to recipient
             if re.search(r"\b(?:ORDER\s*(?:ID|NO|NUMBER|#)?)\s*[:\-]?\s*([A-Za-z0-9\-_]{1,30})\b", line, re.IGNORECASE):
@@ -486,7 +538,7 @@ def extract_shipping_label_data(
         pipe_match = [col.strip() for col in line.split("|") if col.strip()]
         if len(pipe_match) >= 3:
             name_candidate = pipe_match[0]
-            if not any(header in name_candidate.upper() for header in ["PRODUCT", "ITEM", "DESCRIPTION", "NAME", "TOTAL"]):
+            if not any(header in name_candidate.upper() for header in ["PRODUCT", "ITEM", "DESCRIPTION", "NAME", "TOTAL", "PRICE"]):
                 try:
                     price_val = float(re.sub(r"[^\d\.]", "", pipe_match[1])) if re.search(r"\d", pipe_match[1]) else None
                     total_val = float(re.sub(r"[^\d\.]", "", pipe_match[-1])) if re.search(r"\d", pipe_match[-1]) else None
@@ -500,6 +552,30 @@ def extract_shipping_label_data(
                     ))
                 except Exception:
                     pass
+            continue
+
+        # Space delimited table row e.g. 'TShirt 10 10' or 'T-Shirt 1 499 499'
+        m = re.match(r"^([A-Za-z0-9\s\-]+?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)(?:\s+(\d+(?:\.\d+)?))?$", line.strip())
+        if m:
+            prod = m.group(1).strip()
+            if not any(h in prod.upper() for h in ["TOTAL", "SUBTOTAL", "TAX", "AMOUNT", "GST", "ROUND", "ORDER", "INVOICE", "DATE", "PRICE", "PRODUCT", "SHIP", "FROM", "TO", "ADD"]):
+                nums = [float(x) for x in [m.group(2), m.group(3), m.group(4)] if x is not None]
+                if len(nums) == 2:
+                    items.append(ShippingItem(
+                        product=prod,
+                        quantity=1,
+                        price=nums[0],
+                        currency="INR",
+                        total=nums[1]
+                    ))
+                elif len(nums) == 3:
+                    items.append(ShippingItem(
+                        product=prod,
+                        quantity=int(nums[0]),
+                        price=nums[1],
+                        currency="INR",
+                        total=nums[2]
+                    ))
 
     result.items = items
     return result

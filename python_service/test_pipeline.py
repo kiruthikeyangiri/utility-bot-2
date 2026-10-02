@@ -300,7 +300,32 @@ USPSTRACKING#
     assert unspaced_res.ship_to.city == "Salt Lake City", f"Expected Salt Lake City, got: {unspaced_res.ship_to.city}"
     assert unspaced_res.ship_to.state == "Utah", f"Expected Utah, got: {unspaced_res.ship_to.state}"
     assert unspaced_res.ship_to.postal_code == "11212", f"Expected 11212, got: {unspaced_res.ship_to.postal_code}"
-    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic, USPS & Unspaced OCR).")
+
+    # 5. Test Indian label with payment method and items table
+    indian_ocr = """AHAMMED
+Pre-paid
+12thcross
+KA
+PIN: 560043
+
+SHIP FROM:
+Hari
+Add:1st sector
+Product Price (INR) Total (INR)
+TShirt 10 10
+Total 10 10"""
+    indian_res = extract_shipping_label_data(indian_ocr, indian_ocr)
+    assert indian_res.ship_to.name == "AHAMMED", f"Expected AHAMMED, got: {indian_res.ship_to.name}"
+    assert indian_res.ship_to.address == "12th cross", f"Expected '12th cross', got: {indian_res.ship_to.address}"
+    assert indian_res.ship_to.state == "Karnataka", f"Expected Karnataka, got: {indian_res.ship_to.state}"
+    assert indian_res.ship_to.postal_code == "560043", f"Expected 560043, got: {indian_res.ship_to.postal_code}"
+    assert indian_res.order.payment_type == "PREPAID", f"Expected PREPAID, got: {indian_res.order.payment_type}"
+    assert indian_res.ship_from.name == "Hari", f"Expected Hari, got: {indian_res.ship_from.name}"
+    assert indian_res.ship_from.address == "1st sector", f"Expected '1st sector', got: {indian_res.ship_from.address}"
+    assert len(indian_res.items) >= 1, "Expected at least 1 item"
+    assert indian_res.items[0].product == "TShirt"
+    assert indian_res.items[0].price == 10.0
+    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic, USPS, Unspaced OCR & Tables).")
 
 
 
