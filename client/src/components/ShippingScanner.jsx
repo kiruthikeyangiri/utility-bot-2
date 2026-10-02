@@ -9,7 +9,6 @@ import {
   AlertCircle, 
   CheckCircle2, 
   ArrowRight,
-  Sparkles,
   Sliders,
   FileCheck,
   Cpu,
@@ -165,17 +164,6 @@ export default function ShippingScanner({ settings = {} }) {
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">
               Shipping Label Scanner
             </h2>
-            {apiKey.trim() ? (
-              <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Groq LLM Active</span>
-              </span>
-            ) : (
-              <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center space-x-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                <span>Heuristic Mode Active</span>
-              </span>
-            )}
           </div>
           <p className="text-xs text-slate-500 max-w-2xl">
             Upload 1, 2, or up to 3 shipping label images. RapidOCR reads the label text, which is sent to the LLM to understand and separate into FROM, TO, Order, Package, and Item lines alongside multi-pass Barcode & QR code scanning.
@@ -208,9 +196,6 @@ export default function ShippingScanner({ settings = {} }) {
             <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
               Scanner, LLM & Preprocessing Options
             </h4>
-            <span className="text-[11px] text-slate-500">
-              {apiKey.trim() ? "🟢 Cloud LLM Mode Connected" : "⚡ Offline Local Engine Active"}
-            </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
