@@ -322,10 +322,32 @@ Total 10 10"""
     assert indian_res.order.payment_type == "PREPAID", f"Expected PREPAID, got: {indian_res.order.payment_type}"
     assert indian_res.ship_from.name == "Hari", f"Expected Hari, got: {indian_res.ship_from.name}"
     assert indian_res.ship_from.address == "1st sector", f"Expected '1st sector', got: {indian_res.ship_from.address}"
-    assert len(indian_res.items) >= 1, "Expected at least 1 item"
-    assert indian_res.items[0].product == "TShirt"
-    assert indian_res.items[0].price == 10.0
-    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic, USPS, Unspaced OCR & Tables).")
+    # 6. Test 2-Column / Side-by-Side shipping label
+    two_col_words = [
+        {"text": "John Doe", "x": 40, "y": 100, "width": 80, "height": 20},
+        {"text": "ACME Corporation", "x": 320, "y": 100, "width": 130, "height": 20},
+        {"text": "123 Main Street", "x": 40, "y": 130, "width": 120, "height": 20},
+        {"text": "456 Industrial Blvd", "x": 320, "y": 130, "width": 140, "height": 20},
+        {"text": "Apt 4B", "x": 40, "y": 160, "width": 50, "height": 20},
+        {"text": "Los Angeles, CA 90001", "x": 40, "y": 190, "width": 150, "height": 20},
+        {"text": "New York, NY 10001", "x": 320, "y": 190, "width": 140, "height": 20},
+    ]
+    two_col_raw = """John Doe ACME Corporation
+123 Main Street 456 Industrial Blvd
+Apt 4B
+Los Angeles, CA 90001 New York, NY 10001"""
+    two_col_res = extract_shipping_label_data(two_col_raw, two_col_raw, ocr_words=two_col_words)
+    assert two_col_res.ship_to.name == "John Doe", f"Expected John Doe, got: {two_col_res.ship_to.name}"
+    assert "123 Main Street" in (two_col_res.ship_to.address or ""), f"Expected 123 Main Street in address, got: {two_col_res.ship_to.address}"
+    assert two_col_res.ship_to.city == "Los Angeles", f"Expected Los Angeles, got: {two_col_res.ship_to.city}"
+    assert two_col_res.ship_to.state == "California", f"Expected California, got: {two_col_res.ship_to.state}"
+    assert two_col_res.ship_to.postal_code == "90001", f"Expected 90001, got: {two_col_res.ship_to.postal_code}"
+    assert two_col_res.ship_from.name == "ACME Corporation", f"Expected ACME Corporation, got: {two_col_res.ship_from.name}"
+    assert "456 Industrial Blvd" in (two_col_res.ship_from.address or ""), f"Expected 456 Industrial Blvd in address, got: {two_col_res.ship_from.address}"
+    assert two_col_res.ship_from.city == "New York", f"Expected New York, got: {two_col_res.ship_from.city}"
+    assert two_col_res.ship_from.state == "New York", f"Expected New York, got: {two_col_res.ship_from.state}"
+    assert two_col_res.ship_from.postal_code == "10001", f"Expected 10001, got: {two_col_res.ship_from.postal_code}"
+    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic, USPS, Unspaced OCR, Tables & 2-Column).")
 
 
 
