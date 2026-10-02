@@ -84,12 +84,15 @@ POSTAGE_PATTERNS = [
     r"^\d+(?:\.\d+)?\s*(?:oz|lb|lbs|kg|g)\b",
     r"first[- ]class",
     r"priority\s*mail",
-    r"commercial\s*base",
+    r"commer[a-z0-9]*\s*base",
+    r"071s\d+",
     r"usps\s*first",
     r"mailed\s*from\s*zip",
     r"postage\s*and\s*fees",
     r"permit\s*no",
-    r"carrier\s*leave\s*if\s*no\s*response"
+    r"carrier\s*leave\s*if\s*no\s*response",
+    r"\b9400\d{15,25}\b",
+    r"uspstracking",
 ]
 
 TO_HEADER_PATTERN = r"^(?:SHIP\s*TO|SHIPPING\s*ADDRESS|DELIVERY\s*ADDRESS|DELIVER\s*TO|CONSIGNEE|RECEIVER|DESTINATION)\b\s*[:\-]?"
@@ -100,6 +103,41 @@ def _is_postage_line(line: str) -> bool:
     """Checks if line contains postage, shipping rate or carrier service metadata."""
     l_lower = line.lower().strip()
     return any(bool(re.search(pat, l_lower)) for pat in POSTAGE_PATTERNS)
+
+
+def _clean_spaces(text: str) -> str:
+    """
+    Cleans OCR text where words might have been concatenated without spaces.
+    E.g. 'JohnDoe' -> 'John Doe'
+         'WAREHOUSE2' -> 'WAREHOUSE 2'
+         '11919WINKRD' -> '11919 WINK RD'
+         '321StreetOverThere' -> '321 Street Over There'
+    """
+    if not text:
+        return text
+
+    # Don't split pure long digit sequences, URLs or emails
+    if re.search(r"^\d{10,}$", text) or "@" in text or "http" in text or text.startswith("//"):
+        return text
+
+    # Insert space between lower case and Upper case (CamelCase: JohnDoe -> John Doe)
+    s = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+
+    # Insert space between number and letter (except ordinals like 1st, 2nd, 3rd, 4th, etc.)
+    # 11919WINK -> 11919 WINK, 321Street -> 321 Street
+    # But preserve 1st, 2nd, 3rd, 12th
+    s = re.sub(r"(\d+)(?!(?:st|nd|rd|th)\b)([A-Za-z])", r"\1 \2", s, flags=re.IGNORECASE)
+
+    # Insert space between letter and number (except if already separated)
+    # WAREHOUSE2 -> WAREHOUSE 2
+    s = re.sub(r"([A-Za-z])(\d+)", r"\1 \2", s)
+
+    # Common street suffix splits if joined like WINKRD -> WINK RD, MAINAVE -> MAIN AVE, etc.
+    s = re.sub(r"([A-Za-z]{3,})(RD|ST|AVE|BLVD|DR|LN|WAY|PKWY|HWY|CT|CIR)\b", r"\1 \2", s, flags=re.IGNORECASE)
+
+    # Normalize multiple spaces
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
 
 
 def _is_valid_phone(text: str) -> bool:
@@ -165,11 +203,24 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
     if not lines:
         return contact
 
-    cleaned_lines = [l.strip() for l in lines if l.strip()]
-    address_parts = []
+    cleaned_lines = []
+    for l in lines:
+        l_str = l.strip()
+        if not l_str:
+            continue
+        # Skip postage or tracking lines inside address block
+        if _is_postage_line(l_str):
+            continue
+        if re.search(r"\b(?:USPSTRACKING|TRACKING|BARCODE)\b", l_str, re.IGNORECASE):
+            continue
+        if re.search(r"^\d{16,}$", l_str):  # Long tracking digits sequence
+            continue
+        cleaned_lines.append(l_str)
 
-    for line in cleaned_lines:
-        line_clean = line.strip()
+    address_parts = []
+    idx = 0
+    while idx < len(cleaned_lines):
+        line_clean = cleaned_lines[idx].strip()
 
         # 1. Email check
         if not contact["email"]:
@@ -187,12 +238,14 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
             else:
                 after_label = re.sub(r"^(?:PHONE|MOB|MOBILE|TEL|CONTACT)\s*[:\-]?", "", line_clean, flags=re.IGNORECASE).strip()
                 if after_label:
-                    address_parts.append(after_label)
+                    address_parts.append(_clean_spaces(after_label))
+                idx += 1
                 continue
         elif not contact["phone"]:
             ph = _extract_phone(line_clean)
             if ph and len(line_clean.replace(ph, "").strip()) < 4:
                 contact["phone"] = ph
+                idx += 1
                 continue
 
         # 3. Country check
@@ -203,19 +256,45 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
             contact["country"] = "India"
             line_clean = re.sub(r"\b(?:INDIA|IND|BHARAT)\b", "", line_clean, flags=re.IGNORECASE).strip()
 
-        # 4. US City, State, ZIP pattern: e.g. "HOUSTON TX 77024-7134" or "Salt Lake City, UT 11212"
-        m_csz = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Z]{2})\s+([0-9]{5}(?:-[0-9]{4})?)\b", line_clean)
-        if m_csz:
-            city_cand = m_csz.group(1).strip()
-            state_code = m_csz.group(2).upper()
-            zip_cand = m_csz.group(3).strip()
-            if state_code in US_STATES:
-                contact["city"] = city_cand
-                contact["state"] = US_STATES[state_code]
-                contact["postal_code"] = zip_cand
-                if not contact["country"]:
-                    contact["country"] = "United States"
-                continue
+        # 4. US City, State, ZIP patterns:
+        # Pattern A: Standard spaced e.g. "Salt Lake City, UT 11212" or "HOUSTON TX 77024-7134"
+        m_csz = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Za-z]{2})\s+([0-9]{5}(?:-[0-9]{4})?)$", line_clean)
+        if m_csz and m_csz.group(2).upper() in US_STATES:
+            contact["city"] = _clean_spaces(m_csz.group(1).strip()).title()
+            contact["state"] = US_STATES[m_csz.group(2).upper()]
+            contact["postal_code"] = m_csz.group(3).strip()
+            if not contact["country"]:
+                contact["country"] = "United States"
+            idx += 1
+            continue
+
+        # Pattern B: Joined unspaced e.g. "HOUSTONTX77024-7134" or "HOUSTONTX77024"
+        m_csz_joined = re.search(r"^([A-Za-z]{3,})([A-Za-z]{2})([0-9]{5}(?:-[0-9]{4})?)$", line_clean)
+        if m_csz_joined and m_csz_joined.group(2).upper() in US_STATES:
+            contact["city"] = _clean_spaces(m_csz_joined.group(1).strip()).title()
+            contact["state"] = US_STATES[m_csz_joined.group(2).upper()]
+            contact["postal_code"] = m_csz_joined.group(3).strip()
+            if not contact["country"]:
+                contact["country"] = "United States"
+            idx += 1
+            continue
+
+        # Pattern C: City, State on current line, ZIP on next line
+        # e.g. Current line: "Salt Lake City, UT" or "Salt Lake City UT", Next line: "11212" or "11212-1234"
+        m_cs = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Za-z]{2})$", line_clean)
+        if m_cs and m_cs.group(2).upper() in US_STATES:
+            contact["city"] = _clean_spaces(m_cs.group(1).strip()).title()
+            contact["state"] = US_STATES[m_cs.group(2).upper()]
+            if not contact["country"]:
+                contact["country"] = "United States"
+            if idx + 1 < len(cleaned_lines):
+                next_l = cleaned_lines[idx + 1].strip()
+                if re.match(r"^\d{5}(?:-\d{4})?$", next_l):
+                    contact["postal_code"] = next_l
+                    idx += 2
+                    continue
+            idx += 1
+            continue
 
         # 5. Postal / PIN Code check
         if not contact["postal_code"]:
@@ -241,13 +320,17 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
                             contact["country"] = "India"
                         break
 
-        if line_clean and line_clean not in [":", "-", ",", "."]:
-            address_parts.append(line_clean)
+        cleaned_str = _clean_spaces(line_clean)
+        if cleaned_str and cleaned_str not in [":", "-", ",", "."]:
+            address_parts.append(cleaned_str)
+
+        idx += 1
 
     # Assign Name / Company from top line
     if address_parts:
         candidate_name = address_parts[0]
         candidate_name = re.sub(r"^(?:NAME|TO|CONSIGNEE|MR|MS|MRS|RECEIVER|SENDER|FROM)\s*[:\-]?", "", candidate_name, flags=re.IGNORECASE).strip()
+        candidate_name = _clean_spaces(candidate_name)
         street_kws = ["STREET", "RD", "ROAD", "AVE", "BLVD", "LANE", "DRIVE", "WAY", "HWY", "HIGHWAY", "CROSS", "NAGAR", "SECTOR", "PLOT"]
         if len(candidate_name) < 45 and not any(kw in candidate_name.upper() for kw in street_kws):
             contact["name"] = candidate_name
@@ -586,14 +669,20 @@ Return only valid JSON adhering strictly to the schema."""
                     to_addr = str(to_phone)
                 to_phone = None
 
+            raw_to_name = to_data.get("name") or heuristic_res.ship_to.name
+            raw_to_addr = to_addr or heuristic_res.ship_to.address
+            raw_to_city = to_data.get("city") or heuristic_res.ship_to.city
+            raw_to_state = to_data.get("state") or heuristic_res.ship_to.state
+            raw_to_postal = str(to_data.get("postal_code")) if to_data.get("postal_code") is not None else heuristic_res.ship_to.postal_code
+
             result.ship_to = ShipToContact(
-                name=to_data.get("name") or heuristic_res.ship_to.name,
+                name=_clean_spaces(raw_to_name) if raw_to_name else None,
                 phone=to_phone or (heuristic_res.ship_to.phone if _is_valid_phone(str(heuristic_res.ship_to.phone or "")) else None),
                 email=to_data.get("email") or heuristic_res.ship_to.email,
-                address=to_addr or heuristic_res.ship_to.address,
-                city=to_data.get("city") or heuristic_res.ship_to.city,
-                state=to_data.get("state") or heuristic_res.ship_to.state,
-                postal_code=str(to_data.get("postal_code")) if to_data.get("postal_code") is not None else heuristic_res.ship_to.postal_code,
+                address=_clean_spaces(raw_to_addr) if raw_to_addr else None,
+                city=_clean_spaces(raw_to_city) if raw_to_city else None,
+                state=_clean_spaces(raw_to_state) if raw_to_state else None,
+                postal_code=raw_to_postal,
                 country=to_data.get("country") or heuristic_res.ship_to.country
             )
         else:
@@ -612,15 +701,28 @@ Return only valid JSON adhering strictly to the schema."""
                     from_addr = str(from_phone)
                 from_phone = None
 
+            raw_from_name = from_data.get("name") or heuristic_res.ship_from.name
+            raw_from_comp = from_data.get("company") or heuristic_res.ship_from.company
+            raw_from_addr = from_addr or heuristic_res.ship_from.address
+            raw_from_city = from_data.get("city") or heuristic_res.ship_from.city
+            raw_from_state = from_data.get("state") or heuristic_res.ship_from.state
+            raw_from_postal = str(from_data.get("postal_code")) if from_data.get("postal_code") is not None else heuristic_res.ship_from.postal_code
+
+            # Check if name was accidentally extracted as a postage line
+            if raw_from_name and _is_postage_line(raw_from_name):
+                raw_from_name = heuristic_res.ship_from.name
+            if raw_from_comp and _is_postage_line(raw_from_comp):
+                raw_from_comp = heuristic_res.ship_from.company
+
             result.ship_from = ShipFromContact(
-                name=from_data.get("name") or heuristic_res.ship_from.name,
-                company=from_data.get("company") or heuristic_res.ship_from.company,
+                name=_clean_spaces(raw_from_name) if raw_from_name else None,
+                company=_clean_spaces(raw_from_comp) if raw_from_comp else None,
                 phone=from_phone or (heuristic_res.ship_from.phone if _is_valid_phone(str(heuristic_res.ship_from.phone or "")) else None),
                 email=from_data.get("email") or heuristic_res.ship_from.email,
-                address=from_addr or heuristic_res.ship_from.address,
-                city=from_data.get("city") or heuristic_res.ship_from.city,
-                state=from_data.get("state") or heuristic_res.ship_from.state,
-                postal_code=str(from_data.get("postal_code")) if from_data.get("postal_code") is not None else heuristic_res.ship_from.postal_code,
+                address=_clean_spaces(raw_from_addr) if raw_from_addr else None,
+                city=_clean_spaces(raw_from_city) if raw_from_city else None,
+                state=_clean_spaces(raw_from_state) if raw_from_state else None,
+                postal_code=raw_from_postal,
                 country=from_data.get("country") or heuristic_res.ship_from.country
             )
         else:

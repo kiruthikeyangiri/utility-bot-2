@@ -274,7 +274,33 @@ United States"""
     assert usps_res.ship_to.state == "Utah", f"Expected Utah, got: {usps_res.ship_to.state}"
     assert usps_res.ship_to.postal_code == "11212", f"Expected 11212, got: {usps_res.ship_to.postal_code}"
     assert usps_res.ship_to.country == "United States", f"Expected United States, got: {usps_res.ship_to.country}"
-    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic & USPS).")
+
+    # 4. Test unspaced OCR tokens and tracking numbers
+    unspaced_ocr = """5oz First-Class Pkg Svc
+CommeroialBasePrice 071S00858181
+USPS FIRST-CLASS PKG
+Mailed from ZIP 77024
+WAREHOUSE2
+11919WINKRD
+HOUSTONTX77024-7134
+Order: 286
+JohnDoe
+321StreetOverThere
+Salt Lake City, UT
+11212
+USPSTRACKING#
+9400110200793961893691"""
+    unspaced_res = extract_shipping_label_data(unspaced_ocr, unspaced_ocr)
+    assert unspaced_res.ship_from.name == "WAREHOUSE 2", f"Expected WAREHOUSE 2, got: {unspaced_res.ship_from.name}"
+    assert unspaced_res.ship_from.city == "Houston", f"Expected Houston, got: {unspaced_res.ship_from.city}"
+    assert unspaced_res.ship_from.state == "Texas", f"Expected Texas, got: {unspaced_res.ship_from.state}"
+    assert unspaced_res.ship_from.postal_code == "77024-7134", f"Expected 77024-7134, got: {unspaced_res.ship_from.postal_code}"
+    assert unspaced_res.ship_to.name == "John Doe", f"Expected John Doe, got: {unspaced_res.ship_to.name}"
+    assert unspaced_res.ship_to.address == "321 Street Over There", f"Expected 321 Street Over There, got: {unspaced_res.ship_to.address}"
+    assert unspaced_res.ship_to.city == "Salt Lake City", f"Expected Salt Lake City, got: {unspaced_res.ship_to.city}"
+    assert unspaced_res.ship_to.state == "Utah", f"Expected Utah, got: {unspaced_res.ship_to.state}"
+    assert unspaced_res.ship_to.postal_code == "11212", f"Expected 11212, got: {unspaced_res.ship_to.postal_code}"
+    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic, USPS & Unspaced OCR).")
 
 
 
