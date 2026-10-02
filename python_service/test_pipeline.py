@@ -208,12 +208,11 @@ def test_crosscheck_service():
     print("  [PASS] Multi-Document Cross-Verification tests passed.")
 
 
-from shipping_extractor import extract_shipping_label_data
-
+from shipping_extractor import extract_shipping_label_data, extract_shipping_info_llm
 
 
 def test_shipping_label_extraction():
-    print("Testing Shipping Label Heuristic Extraction & Phone Validation...")
+    print("Testing Shipping Label LLM & Heuristic Extraction...")
     ocr_raw = """
     SHIP TO:
     AHAMMED
@@ -235,6 +234,7 @@ def test_shipping_label_extraction():
 
     T-Shirt Qty 1 Price 499 Total 499
     """
+    # 1. Test baseline heuristic parser
     res = extract_shipping_label_data(ocr_raw, ocr_raw)
     assert res.ship_to.phone is None, f"Expected phone to be None, got: {res.ship_to.phone}"
     assert "12th cross" in (res.ship_to.address or ""), f"Expected '12th cross' in address, got: {res.ship_to.address}"
@@ -243,7 +243,15 @@ def test_shipping_label_extraction():
     assert res.order.awb_number == "1122334455"
     assert res.order.payment_type == "COD"
     assert "1.5" in (res.package.weight or "")
-    print("  [PASS] Shipping Label Extraction & Phone Validation tests passed.")
+
+    # 2. Test LLM extraction pipeline wrapper
+    llm_res = extract_shipping_info_llm(ocr_raw, ocr_raw)
+    assert llm_res.ship_to.phone is None
+    assert "12th cross" in (llm_res.ship_to.address or "")
+    assert llm_res.order.order_id == "ORD-9928172"
+    assert llm_res.order.awb_number == "1122334455"
+    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed.")
+
 
 
 if __name__ == "__main__":

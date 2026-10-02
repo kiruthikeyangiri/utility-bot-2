@@ -362,3 +362,274 @@ def extract_shipping_label_data(ocr_raw_text: str, ocr_layout_text: str, ocr_wor
     result.items = items
 
     return result
+
+
+SHIPPING_LLM_SYSTEM_PROMPT = """You are an expert Shipping Label and Logistics Document Extraction AI.
+You receive the OCR text and spatial layout information extracted from a parcel/courier shipping label.
+
+Your task is to analyze and understand the shipping label layout and text, and accurately separate the data into:
+- SENDER / ORIGIN ("ship_from")
+- RECEIVER / DESTINATION ("ship_to")
+- ORDER & TRACKING ("order")
+- PACKAGE WEIGHT & DIMENSIONS ("package")
+- PRODUCT LINE ITEMS / MANIFEST ("items")
+- COURIER / LOGISTICS CARRIER ("courier")
+
+JSON Schema to return:
+{
+  "courier": "<Courier Name e.g. Delhivery, Blue Dart, Ekart, Amazon Logistics, DTDC, FedEx, DHL, etc., or null>",
+  "ship_to": {
+    "name": "<Recipient Full Name or null>",
+    "phone": "<Recipient Phone Number or null>",
+    "email": "<Recipient Email or null>",
+    "address": "<Complete Delivery Street Address or null>",
+    "city": "<City or null>",
+    "state": "<State or null>",
+    "postal_code": "<PIN code / ZIP code or null>",
+    "country": "<Country e.g. India or null>"
+  },
+  "ship_from": {
+    "name": "<Sender Contact Name or null>",
+    "company": "<Sender Company / Seller / Shipper Store Name or null>",
+    "phone": "<Sender Phone Number or null>",
+    "email": "<Sender Email or null>",
+    "address": "<Complete Sender / Pickup / Return Address or null>",
+    "city": "<City or null>",
+    "state": "<State or null>",
+    "postal_code": "<PIN code / ZIP code or null>",
+    "country": "<Country or null>"
+  },
+  "order": {
+    "order_id": "<Order ID or null>",
+    "tracking_number": "<Tracking Number or null>",
+    "awb_number": "<AWB / Air Waybill Number or null>",
+    "shipping_date": "<Shipping or Dispatch Date or null>",
+    "payment_type": "<COD / Prepaid / Cash on Delivery or null>",
+    "remarks": "<Special instructions, notes, or remarks or null>"
+  },
+  "package": {
+    "weight": "<Package weight e.g. 2.5 KG or null>",
+    "dimensions": "<Dimensions e.g. 12x12x12 cm or null>"
+  },
+  "items": [
+    {
+      "product": "<Product title or description>",
+      "quantity": <integer quantity or null>,
+      "price": <unit price as float or null>,
+      "currency": "<Currency e.g. INR>",
+      "total": <total price as float or null>
+    }
+  ]
+}
+
+CRITICAL RULES:
+1. SHIP TO represents the recipient (Receiver/Consignee/Delivery Address).
+2. SHIP FROM represents the sender (Origin/Shipper/Return Address/Seller).
+3. PHONE NUMBER RULE: Extract only valid 10-12 digit phone numbers. If the text under or following a 'Phone:' label is an address line (e.g. '12th cross', 'Near Temple', 'MG Road'), DO NOT extract it as phone number. Set phone to null, and keep that text inside the address field!
+4. ITEMS: If a product manifest or table is present (Product, Price, Qty, Total), extract each row into the "items" array. If no items or table are listed, return [].
+5. Do not invent details not present in the OCR text. If an attribute is missing, set it to null.
+6. Return strictly valid JSON adhering to the schema.
+"""
+
+
+def extract_shipping_info_llm(
+    ocr_raw_text: str,
+    ocr_layout_text: str = "",
+    ocr_words: Optional[List[Dict[str, Any]]] = None,
+    api_key: Optional[str] = None,
+    model_name: Optional[str] = None,
+    temperature: float = 0.0
+) -> ShippingLabelResult:
+    """
+    LLM-powered shipping label extraction.
+    Sends RapidOCR text and spatial layout to the LLM (Groq / Llama 3.3 / GPT / Qwen).
+    The LLM understands the label and separates the data into FROM, TO, Order, Package, Items, etc.
+    Falls back to spatial heuristic extraction if LLM is unavailable, offline, or fails.
+    """
+    import json
+    import os
+    from llm_extractor import get_groq_client
+
+    # 1. First run the baseline heuristic extraction
+    heuristic_res = extract_shipping_label_data(
+        ocr_raw_text=ocr_raw_text,
+        ocr_layout_text=ocr_layout_text,
+        ocr_words=ocr_words
+    )
+
+    client = get_groq_client(api_key)
+    if not client:
+        return heuristic_res
+
+    # 2. Build prompt with OCR output
+    clean_layout = ocr_layout_text[:3500] if ocr_layout_text else ""
+    user_content = f"""Here is the OCR text extracted from the shipping label:
+
+--- RAW OCR TEXT ---
+{ocr_raw_text[:3500]}
+
+--- SPATIAL LAYOUT INFORMATION ---
+{clean_layout}
+
+Analyze the shipping label text and layout.
+Separate all data into SHIP TO (Receiver), SHIP FROM (Sender), ORDER, PACKAGE, and ITEMS.
+Return only valid JSON adhering strictly to the schema."""
+
+    primary_model = model_name or os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    models_to_try = [primary_model, "llama-3.3-70b-versatile", "openai/gpt-oss-120b", "qwen/qwen3.6-27b", "llama-3.1-8b-instant"]
+    models_to_try = list(dict.fromkeys(models_to_try))
+
+    extracted_dict = None
+    for model in models_to_try:
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": SHIPPING_LLM_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content}
+                ],
+                temperature=temperature,
+                response_format={"type": "json_object"},
+                timeout=8.0
+            )
+            resp_str = completion.choices[0].message.content.strip()
+            try:
+                extracted_dict = json.loads(resp_str)
+                break
+            except json.JSONDecodeError:
+                start_i = resp_str.find("{")
+                end_i = resp_str.rfind("}")
+                if start_i != -1 and end_i != -1:
+                    extracted_dict = json.loads(resp_str[start_i:end_i+1])
+                    break
+        except Exception:
+            continue
+
+    if not extracted_dict or not isinstance(extracted_dict, dict):
+        return heuristic_res
+
+    # 3. Assemble and validate LLM output into ShippingLabelResult
+    try:
+        result = ShippingLabelResult()
+        result.raw_ocr_text = ocr_raw_text
+
+        # Courier
+        llm_courier = extracted_dict.get("courier")
+        result.courier = llm_courier or heuristic_res.courier
+
+        # SHIP TO (Receiver)
+        to_data = extracted_dict.get("ship_to") or {}
+        if isinstance(to_data, dict):
+            to_phone = to_data.get("phone")
+            to_addr = to_data.get("address")
+            if to_phone and not _is_valid_phone(str(to_phone)):
+                if to_addr:
+                    if str(to_phone) not in to_addr:
+                        to_addr = f"{to_phone}, {to_addr}"
+                else:
+                    to_addr = str(to_phone)
+                to_phone = None
+
+            result.ship_to = ShipToContact(
+                name=to_data.get("name") or heuristic_res.ship_to.name,
+                phone=to_phone or (heuristic_res.ship_to.phone if _is_valid_phone(str(heuristic_res.ship_to.phone or "")) else None),
+                email=to_data.get("email") or heuristic_res.ship_to.email,
+                address=to_addr or heuristic_res.ship_to.address,
+                city=to_data.get("city") or heuristic_res.ship_to.city,
+                state=to_data.get("state") or heuristic_res.ship_to.state,
+                postal_code=str(to_data.get("postal_code")) if to_data.get("postal_code") is not None else heuristic_res.ship_to.postal_code,
+                country=to_data.get("country") or heuristic_res.ship_to.country or "India"
+            )
+        else:
+            result.ship_to = heuristic_res.ship_to
+
+        # SHIP FROM (Sender)
+        from_data = extracted_dict.get("ship_from") or {}
+        if isinstance(from_data, dict):
+            from_phone = from_data.get("phone")
+            from_addr = from_data.get("address")
+            if from_phone and not _is_valid_phone(str(from_phone)):
+                if from_addr:
+                    if str(from_phone) not in from_addr:
+                        from_addr = f"{from_phone}, {from_addr}"
+                else:
+                    from_addr = str(from_phone)
+                from_phone = None
+
+            result.ship_from = ShipFromContact(
+                name=from_data.get("name") or heuristic_res.ship_from.name,
+                company=from_data.get("company") or heuristic_res.ship_from.company,
+                phone=from_phone or (heuristic_res.ship_from.phone if _is_valid_phone(str(heuristic_res.ship_from.phone or "")) else None),
+                email=from_data.get("email") or heuristic_res.ship_from.email,
+                address=from_addr or heuristic_res.ship_from.address,
+                city=from_data.get("city") or heuristic_res.ship_from.city,
+                state=from_data.get("state") or heuristic_res.ship_from.state,
+                postal_code=str(from_data.get("postal_code")) if from_data.get("postal_code") is not None else heuristic_res.ship_from.postal_code,
+                country=from_data.get("country") or heuristic_res.ship_from.country or "India"
+            )
+        else:
+            result.ship_from = heuristic_res.ship_from
+
+        # ORDER
+        ord_data = extracted_dict.get("order") or {}
+        if isinstance(ord_data, dict):
+            result.order = OrderInformation(
+                order_id=ord_data.get("order_id") or heuristic_res.order.order_id,
+                tracking_number=ord_data.get("tracking_number") or heuristic_res.order.tracking_number,
+                awb_number=ord_data.get("awb_number") or heuristic_res.order.awb_number,
+                shipping_date=ord_data.get("shipping_date") or heuristic_res.order.shipping_date,
+                payment_type=ord_data.get("payment_type") or heuristic_res.order.payment_type,
+                remarks=ord_data.get("remarks") or heuristic_res.order.remarks
+            )
+        else:
+            result.order = heuristic_res.order
+
+        # PACKAGE
+        pkg_data = extracted_dict.get("package") or {}
+        if isinstance(pkg_data, dict):
+            result.package = PackageInformation(
+                weight=pkg_data.get("weight") or heuristic_res.package.weight,
+                dimensions=pkg_data.get("dimensions") or heuristic_res.package.dimensions
+            )
+        else:
+            result.package = heuristic_res.package
+
+        # ITEMS
+        items_list = extracted_dict.get("items")
+        if isinstance(items_list, list) and items_list:
+            parsed_items = []
+            for it in items_list:
+                if isinstance(it, dict) and it.get("product"):
+                    try:
+                        q_val = None
+                        if it.get("quantity") is not None:
+                            q_clean = re.sub(r"[^\d]", "", str(it["quantity"]))
+                            q_val = int(q_clean) if q_clean else None
+                        
+                        p_val = None
+                        if it.get("price") is not None:
+                            p_clean = re.sub(r"[^\d\.]", "", str(it["price"]))
+                            p_val = float(p_clean) if p_clean else None
+
+                        t_val = None
+                        if it.get("total") is not None:
+                            t_clean = re.sub(r"[^\d\.]", "", str(it["total"]))
+                            t_val = float(t_clean) if t_clean else None
+
+                        parsed_items.append(ShippingItem(
+                            product=str(it.get("product")),
+                            quantity=q_val,
+                            price=p_val,
+                            currency=str(it.get("currency") or "INR"),
+                            total=t_val or p_val
+                        ))
+                    except Exception:
+                        pass
+            result.items = parsed_items if parsed_items else heuristic_res.items
+        else:
+            result.items = heuristic_res.items
+
+        return result
+    except Exception:
+        return heuristic_res
+

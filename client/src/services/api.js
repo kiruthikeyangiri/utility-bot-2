@@ -269,12 +269,19 @@ export const extractShippingApi = async (files, options = {}) => {
   if (options.enable_denoise !== undefined) {
     formData.append('enable_denoise', options.enable_denoise);
   }
+  if (options.model_name !== undefined && options.model_name) {
+    formData.append('model_name', options.model_name);
+  }
+  if (options.groq_api_key !== undefined && options.groq_api_key) {
+    formData.append('groq_api_key', options.groq_api_key);
+  }
 
   const response = await api.post('/extract-shipping', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
   });
+
 
   return response.data;
 };

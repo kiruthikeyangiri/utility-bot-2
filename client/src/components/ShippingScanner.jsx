@@ -11,22 +11,24 @@ import {
   ArrowRight,
   Sparkles,
   Sliders,
-  FileCheck
+  FileCheck,
+  Cpu
 } from 'lucide-react';
 import { extractShippingApi } from '../services/api';
 import ShippingResultsView from './ShippingResultsView';
 
-export default function ShippingScanner() {
+export default function ShippingScanner({ settings = {} }) {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   
-  // OCR & enhancement options
+  // OCR, LLM & enhancement options
   const [minConfidence, setMinConfidence] = useState(20);
   const [enableClahe, setEnableClahe] = useState(true);
   const [enableDenoise, setEnableDenoise] = useState(true);
+  const [selectedModel, setSelectedModel] = useState(settings.model_name || 'llama-3.3-70b-versatile');
   const [showOptions, setShowOptions] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -132,6 +134,8 @@ export default function ShippingScanner() {
         min_confidence: minConfidence,
         enable_clahe: enableClahe,
         enable_denoise: enableDenoise,
+        model_name: selectedModel,
+        groq_api_key: settings.groq_api_key,
       });
       setResults(data);
     } catch (err) {
@@ -157,11 +161,11 @@ export default function ShippingScanner() {
               Shipping Label Scanner
             </h2>
             <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Multi-Image AI
+              RapidOCR → LLM AI
             </span>
           </div>
           <p className="text-xs text-slate-500 max-w-2xl">
-            Upload 1, 2, or up to 3 shipping label images. Each image is processed separately to extract courier, sender, receiver addresses, tracking codes, package dimensions, line items, 1D barcodes, and 2D QR codes.
+            Upload 1, 2, or up to 3 shipping label images. RapidOCR reads the label text, which is sent to the LLM to understand and separate into FROM, TO, Order, Package, and Item lines alongside multi-pass Barcode & QR code scanning.
           </p>
         </div>
 
@@ -188,9 +192,28 @@ export default function ShippingScanner() {
       {showOptions && (
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in">
           <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-            Scanner & Preprocessing Options
+            Scanner, LLM & Preprocessing Options
           </h4>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            {/* AI Model selection */}
+            <div className="space-y-1">
+              <label className="text-slate-700 font-medium flex items-center space-x-1.5">
+                <Cpu className="w-3.5 h-3.5 text-sky-600" />
+                <span>Extraction LLM Model:</span>
+              </label>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500 transition"
+              >
+                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Recommended)</option>
+                <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+                <option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b</option>
+                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
+              </select>
+            </div>
+
+            {/* Min OCR Confidence */}
             <div className="space-y-1">
               <div className="flex justify-between font-medium text-slate-700">
                 <span>Min OCR Confidence:</span>
@@ -203,11 +226,11 @@ export default function ShippingScanner() {
                 step="5"
                 value={minConfidence}
                 onChange={(e) => setMinConfidence(parseFloat(e.target.value))}
-                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-600"
+                className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-sky-600 mt-2"
               />
             </div>
 
-            <div className="flex items-center space-x-2 pt-3">
+            <div className="flex items-center space-x-2 pt-4">
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -219,7 +242,7 @@ export default function ShippingScanner() {
               </label>
             </div>
 
-            <div className="flex items-center space-x-2 pt-3">
+            <div className="flex items-center space-x-2 pt-4">
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -364,7 +387,7 @@ export default function ShippingScanner() {
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
                   <span>
-                    Scanning {selectedFiles.length} Label{selectedFiles.length > 1 ? 's' : ''} (RapidOCR + ZXing-CPP Barcode & QR)...
+                    Scanning {selectedFiles.length} Label{selectedFiles.length > 1 ? 's' : ''} (RapidOCR → LLM Data Separation → Barcode & QR Engine)...
                   </span>
                 </>
               ) : (
@@ -381,6 +404,7 @@ export default function ShippingScanner() {
 
         </div>
       )}
+
 
       {/* Error Alert Box */}
       {errorMessage && (

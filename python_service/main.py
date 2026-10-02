@@ -29,8 +29,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from shipping_schemas import ShippingLabelResult, CodeItem
-from shipping_extractor import extract_shipping_label_data
+from shipping_extractor import extract_shipping_label_data, extract_shipping_info_llm
 from code_reader import extract_codes
+
 
 from schemas import (
     FinalExtractionResult, 
@@ -567,14 +568,16 @@ async def extract_shipping_labels(
     files: List[UploadFile] = File(...),
     min_confidence: float = Form(20.0),
     enable_clahe: bool = Form(True),
-    enable_denoise: bool = Form(True)
+    enable_denoise: bool = Form(True),
+    model_name: Optional[str] = Form(None),
+    groq_api_key: Optional[str] = Form(None)
 ):
     """
     Multi-Image Shipping Label Extraction Endpoint.
     Accepts 1 to 3 images (JPG, JPEG, PNG).
     Processes every image separately without merging.
-    Runs RapidOCR, Barcode & QR scanning (ZXing-CPP + OpenCV),
-    and heuristic shipping field extraction.
+    Runs RapidOCR, sends OCR output to LLM to understand and separate
+    data into FROM, TO, Order, Package, Items, and scans Barcodes & QR codes.
     """
     if not files or len(files) == 0:
         raise HTTPException(status_code=400, detail="At least 1 shipping label image is required.")
@@ -647,11 +650,13 @@ async def extract_shipping_labels(
             ocr_conf = 0.0
             ocr_words = []
 
-        # 6. Extract Shipping Fields
-        label_res = extract_shipping_label_data(
+        # 6. Extract Shipping Fields via LLM (RapidOCR output -> LLM understands & separates data)
+        label_res = extract_shipping_info_llm(
             ocr_raw_text=ocr_raw_text,
             ocr_layout_text=ocr_layout_text,
-            ocr_words=ocr_words
+            ocr_words=ocr_words,
+            api_key=groq_api_key,
+            model_name=model_name
         )
 
         label_res.image_name = filename
@@ -663,6 +668,7 @@ async def extract_shipping_labels(
         results.append(label_res)
 
     return results
+
 
 
 # -----------------------------------------------------------------------------

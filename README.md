@@ -141,21 +141,25 @@ flowchart TD
 - **Station Device ID Isolation:** Scopes verification records per workstation via `X-Device-Id` headers.
 - **30-Day Statutory Auto-Purge:** Automatic background cleaner removes stale PII records in compliance with DPDP data minimization rules.
 
-### 7. 📦 Shipping Label Scanner & Multi-Pass Barcode / QR Engine (`NEW`)
+### 7. 📦 Shipping Label Scanner: RapidOCR → LLM Intelligence & Multi-Pass Code Reader (`NEW`)
 - **Multi-Image Processing:** Allows simultaneous upload of **1, 2, or 3 shipping label images** (JPG, JPEG, PNG). Each image is processed strictly independently without merging.
-- **Layout-Free Spatial Extraction:** Employs RapidOCR bounding box coordinates, relative positioning, and keyword heuristics (Delhivery, Blue Dart, Ekart, DTDC, Amazon Logistics, FedEx, DHL, etc.).
-  - **SHIP TO (Receiver):** Name, Phone, Email, Address, City, State, Postal Code, Country.
-  - **SHIP FROM (Sender):** Name, Company, Phone, Email, Address, City, State, Postal Code, Country.
-  - **ORDER INFORMATION:** Order ID, Tracking Number, AWB Number, Shipping Date, Payment Type (COD / Prepaid), Remarks.
-  - **PACKAGE INFORMATION:** Weight (e.g., `2.5 KG`), Dimensions (e.g., `12cm x 12cm x 12cm`).
-  - **ITEMS / PRODUCT TABLE:** Extracts SKU line items (Product description, Quantity, Price, Currency, Total).
+- **RapidOCR → LLM Semantic Extraction Flow:**
+  - **Stage 1 (RapidOCR):** Local high-precision RapidOCR extracts raw text and spatial bounding layouts.
+  - **Stage 2 (LLM Intelligence):** The OCR output is streamed directly to the LLM (Groq Cloud LPU with Llama 3.3 70B, GPT OSS 120B, Qwen 3.6, etc.). The LLM understands the courier label semantics, understands the layout, and separates the data into structured entities:
+    - **SHIP TO (Receiver / TO):** Name, Phone, Email, Address, City, State, Postal Code, Country.
+    - **SHIP FROM (Sender / FROM):** Name, Company, Phone, Email, Address, City, State, Postal Code, Country.
+    - **ORDER INFORMATION:** Order ID, Tracking Number, AWB Number, Shipping Date, Payment Type (COD / Prepaid), Remarks.
+    - **PACKAGE INFORMATION:** Weight (e.g., `2.5 KG`), Dimensions (e.g., `12cm x 12cm x 12cm`).
+    - **ITEMS / PRODUCT MANIFEST:** Line items (Product description, Quantity, Price, Currency, Total).
+    - **CARRIER / COURIER:** Automatically identifies logistics carriers (Delhivery, Blue Dart, Ekart, DTDC, Amazon Logistics, FedEx, DHL, etc.).
+  - **Stage 3 (Strict Validation & Fallback):** Validates genuine 10-12 digit phone numbers (non-digit lines like `"12th cross"` under a Phone label are safely retained inside the address while setting `phone = null`). Automatic fallback to spatial heuristic parsing if offline or without an LLM key.
 - **Multi-Pass Barcode & QR Code Reader:**
   - **Primary Engine:** `zxing-cpp` native decoding.
   - **Fallback Pass 2:** Grayscale + Upscale + CLAHE contrast equalization + Sharpening kernel.
   - **Fallback Pass 3:** Otsu / Adaptive Thresholding + 90°/180°/270° multi-angle image rotations.
   - **Fallback Pass 4:** OpenCV `QRCodeDetector` matrix fallback.
   - **Deduplication:** Automatic deduplication by `(format, value)`.
-- **Strict Contact Number Validation:** Validates genuine 10-12 digit mobile phone numbers. Incomplete numbers (e.g. street lines under a Phone label like `"12th cross"`) are cleanly preserved inside the address block while setting `phone = null`.
+
 
 ### 8. ☰ Hamburger Drawer Menu & Multi-Page Navigation (`NEW`)
 - Quick access sidebar triggered by `☰` hamburger button.

@@ -122,9 +122,10 @@ export default function App() {
       {/* PAGE 1: SHIPPING LABEL SCANNER */}
       {currentPage === 'shipping_scanner' && (
         <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-          <ShippingScanner />
+          <ShippingScanner settings={settings} />
         </main>
       )}
+
 
       {/* PAGE 2: ID DOCUMENT VERIFICATION (Existing Workflow 100% Preserved) */}
       {currentPage === 'id_verification' && (
