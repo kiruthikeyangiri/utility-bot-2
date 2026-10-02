@@ -1,4 +1,4 @@
-# 🏢 Utility Bot - Enterprise ID Verification, Biometric Face & Compliance Engine
+# 🏢 Utility Bot - Enterprise ID Verification, Biometrics & Shipping Intelligence Engine
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI_Enterprise_v3.1-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/Frontend-React_18_Vite-61DAFB.svg?style=flat&logo=react)](https://react.dev)
@@ -10,204 +10,207 @@
 [![MongoDB Atlas](https://img.shields.io/badge/Database-MongoDB_Atlas_Cloud-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com)
 [![Compliance](https://img.shields.io/badge/Privacy-DPDP_%26_UIDAI_Compliant-success.svg)](#-data-privacy--enterprise-security)
 
-**Utility Bot** is a high-throughput, bank-grade identity verification, logistics intelligence, and compliance engine. It supports instant verification of Indian government identity documents (**Aadhaar Card**, **PAN Card**, and **Driving Licence**) as well as multi-image **Shipping Label Scanning** for courier & logistics parcels.
-
-The platform integrates **RapidOCR ONNX**, **ZXing-CPP Barcode & 2D Matrix Engine**, **YOLOv8 Face Detection**, **Deep SFace 128-D Biometric Face Recognition**, **Anti-Spoofing Liveness Detection**, **Multi-Document Cross-Verification**, and **Privacy-Safe Identity Reference Cards** to deliver sub-second extractions, zero false image crops, and full compliance with DPDP & UIDAI regulations.
-
+**Utility Bot** is an enterprise-grade AI automation suite providing two production workflows in a single unified system:
+1. **🆔 Government ID Card Verification & Biometric KYC**: Instant classification, portrait extraction, Aadhaar masking, SFace 128-D biometric face matching, anti-spoofing liveness, dual-ID cross-verification, and cryptographically verified Identity Reference Cards.
+2. **📦 Shipping Label Scanner & Logistics Extraction**: Multi-image batch processing (1–3 parcel labels simultaneously), multi-pass Barcode & QR matrix decoding (`zxing-cpp`), spatial 2-column layout reconstruction, and intelligent extraction of **SHIP TO**, **SHIP FROM**, **ORDER**, **PACKAGE**, and **ITEMS / PRODUCT MANIFEST**.
 
 ---
 
-## 📊 End-to-End System Architecture
+## 🗺️ Complete Dual-Engine System Architecture
 
 ```mermaid
 flowchart TD
-    %% ==========================================
-    %% INTAKE & PREPROCESSING
-    %% ==========================================
-    subgraph Intake["1. Document Intake & Preprocessing"]
-        DocUpload["📤 Document Upload (Aadhaar / PAN / DL)"]
-        QualityGate["🔍 Image Quality & Blur Assessment (Laplacian Variance)"]
-        CVPreproc["🖼️ OpenCV Preprocessing Matrix<br/>• Glare Reduction (CLAHE)<br/>• Bilateral Denoising<br/>• Multi-Pass Adaptive Thresholding"]
-    end
+    %% NAVIGATION GATEWAY
+    User(["👤 User / Client Operator"]) --> NavChoice{"☰ Hamburger Menu Navigation"}
+    
+    NavChoice -->|Option 1| IDFlow["🆔 ID Card Verification Flow"]
+    NavChoice -->|Option 2| ShippingFlow["📦 Shipping Label Scanner Flow"]
 
     %% ==========================================
-    %% VISION & AI EXTRACTION PIPELINE
+    %% WORKFLOW 1: ID VERIFICATION
     %% ==========================================
-    subgraph VisionAI["2. Vision & Extraction Engine"]
-        YOLOFace["🎯 YOLOv8 Neural Portrait Cropper<br/><i>Rejects EMV chips, QR codes & watermarks</i>"]
-        RapidOCREngine["📖 RapidOCR (ONNX Runtime)<br/><i>High-speed local OCR & Bounding Box extraction</i>"]
+    subgraph IDWorkflow["Workflow 1: Government ID Verification (Aadhaar / PAN / DL)"]
+        IDUpload["📤 Upload ID Image (JPG / PNG)"]
+        QualityCheck["🔍 Laplacian Variance Quality & Blur Check"]
+        IDPreproc["🖼️ OpenCV Preprocessing (CLAHE, Denoise, Multi-Pass Threshold)"]
+        YOLOCrop["🎯 YOLOv8 Face Detection & Portrait Crop"]
+        RapidID["📖 RapidOCR (ONNX Runtime)"]
         DecisionGate{"⚖️ Pre-LLM Decision Gate<br/><i>Heuristic Type Signature Match</i>"}
-        GroqLlama["🧠 Groq Cloud LPU (Llama 3.3 70B)<br/><i>Multilingual & Layout-aware parsing</i>"]
-        RegexEngine["⚡ Local Heuristic Fallback Engine<br/><i>100% Offline regex extraction</i>"]
-        PydanticVal["📋 Pydantic v2 Schema Normalization<br/><i>ISO dates, Aadhaar masking & strict sanitization</i>"]
+        GroqID["🧠 Groq LPU (Llama 3.3 70B)"]
+        RegexID["⚡ Local Heuristic Regex Fallback"]
+        PydanticID["📋 Pydantic v2 Normalization & UIDAI 8-Digit Masking"]
+        
+        IDUpload --> QualityCheck --> IDPreproc
+        IDPreproc --> YOLOCrop
+        IDPreproc --> RapidID
+        RapidID --> DecisionGate
+        DecisionGate -->|Supported Pattern| GroqID --> PydanticID
+        DecisionGate -->|Offline / No API Key| RegexID --> PydanticID
     end
 
     %% ==========================================
-    %% BIOMETRICS & VERIFICATION
+    %% WORKFLOW 2: SHIPPING LABEL SCANNER
     %% ==========================================
-    subgraph BiometricsLayer["3. Biometrics & Cross-Verification Layer"]
-        LivenessCheck["🛡️ Anti-Spoofing Liveness Engine<br/>• 2D FFT Frequency Moiré Analysis<br/>• Specular Screen Glare Detection<br/>• Active Challenge (Blink / Smile / Turn)"]
-        SFaceMatcher["👤 Deep SFace Biometric Face Matcher<br/>• 128-D Embedding Cosine Similarity<br/>• Calibrated 3-Tier Match Confidence"]
-        CrossCheck["📑 Multi-Doc Cross-Verification<br/>• Indian Name Token / Permutation Match<br/>• Normalized DOB Cross-Check<br/>• Portrait Biometric Consistency"]
+    subgraph ShipWorkflow["Workflow 2: Shipping Label & Logistics Scanner"]
+        ShipUpload["📤 Upload 1 to 3 Label Images (JPG / PNG)"]
+        MultiLoop["🔁 Independent Image Processing Loop (Max 3)"]
+        
+        subgraph ParallelEngines["Parallel Vision & Barcode Pipelines"]
+            CodeScan["🔍 Multi-Pass Barcode & QR Engine<br/>• Pass 1: ZXing-CPP Native<br/>• Pass 2: Grayscale + Upscale + CLAHE + Sharpen<br/>• Pass 3: Adaptive Threshold + 90°/180°/270° Rotation<br/>• Pass 4: OpenCV QRCodeDetector Fallback"]
+            RapidShip["📖 RapidOCR Word & Bounding Box Engine"]
+        end
+        
+        SpatialSort["📐 Spatial 2-Column Layout Reconstructor<br/><i>Separates Left (Destination) & Right (Origin) columns</i>"]
+        ShipLLM["🧠 LLM Semantic Extractor (Groq / Llama 3.3)"]
+        ShipHeuristics["⚡ Spatial Heuristic Extractor & Disentangler<br/>• Token Spacing Normalizer (_clean_spaces)<br/>• Company vs. Personal Entity Router<br/>• Space & Pipe Delimited Table Parser"]
+        ShipSchema["📦 Standard Shipping JSON Model<br/>• SHIP TO (Receiver)<br/>• SHIP FROM (Sender)<br/>• ORDER (ID, AWB, Tracking, Payment)<br/>• PACKAGE (Weight, Dims)<br/>• ITEMS (Products, Qty, Price, Total)"]
+        
+        ShipUpload --> MultiLoop
+        MultiLoop --> CodeScan
+        MultiLoop --> RapidShip
+        RapidShip --> SpatialSort
+        SpatialSort --> ShipLLM --> ShipSchema
+        SpatialSort --> ShipHeuristics --> ShipSchema
+        CodeScan --> ShipSchema
     end
 
-    %% ==========================================
-    %% CONFIRMATION & STORAGE
-    %% ==========================================
-    subgraph StorageSecurity["4. Confirmation Gateway & Security"]
-        HitlGateway["✅ Human-in-the-Loop Gateway<br/>• 'IMG' Sequential ID (Confirmed)<br/>• 'FAIL' Sequential ID (Rejected)"]
-        RefCard["🪪 Privacy-Safe Reference Card<br/>• UIDAI Masked Numbers<br/>• Cryptographic QR Token"]
-        MongoDBAtlas[("☁️ MongoDB Atlas Cloud<br/>• `verifications`<br/>• `identity_references`")]
-        LocalStore[("📁 Device-Scoped Local Cache<br/>• 30-Day Auto-Purge Policy")]
+    %% BIOMETRICS & VERIFICATION EXTENSIONS
+    subgraph KYCBiometrics["Biometric & Dual-ID Verification Extensions"]
+        LiveSelfie["🤳 Live Camera Selfie (Webcam API)"]
+        LivenessEng["🛡️ Anti-Spoofing Liveness Engine (2D FFT Moiré + Glare Detection)"]
+        SFace["👤 Deep SFace 128-D Cosine Face Matcher"]
+        CrossDoc["📑 Dual-ID Cross-Check Engine (Indian Name Token Fuzzy Match + DOB)"]
     end
 
-    %% Flow Connections
-    DocUpload --> QualityGate
-    QualityGate --> CVPreproc
-    CVPreproc --> YOLOFace
-    CVPreproc --> RapidOCREngine
-    RapidOCREngine --> DecisionGate
-    
-    DecisionGate -->|Supported ID Pattern| GroqLlama
-    DecisionGate -->|Offline / No API Key| RegexEngine
-    DecisionGate -->|Non-ID Document| HitlGateway
-    
-    GroqLlama --> PydanticVal
-    RegexEngine --> PydanticVal
-    YOLOFace --> PydanticVal
-    
-    PydanticVal --> HitlGateway
-    
-    %% Biometrics & Cross check triggers
-    HitlGateway -.->|Optional Live Camera KYC| LivenessCheck
-    LivenessCheck --> SFaceMatcher
-    HitlGateway -.->|Optional Dual ID Cross-Check| CrossCheck
-    
-    HitlGateway -->|Confirmed Valid| RefCard
-    RefCard --> MongoDBAtlas
-    RefCard --> LocalStore
+    %% FINAL OUTPUTS
+    subgraph StorageGateways["Storage, Audit & Reference Cards"]
+        ConfirmGate["✅ Confirmation Gateway (IMG... / FAIL... Series)"]
+        RefCardGen["🪪 Privacy-Safe Reference Card + Cryptographic QR"]
+        MongoStorage[("☁️ MongoDB Atlas Cloud Store")]
+        LocalStorage[("📁 Local Storage (30-Day Auto-Purge)")]
+        ShippingCards["📊 Multi-Card Shipping Results View (Details, OCR, Barcodes, JSON)"]
+    end
+
+    PydanticID --> ConfirmGate
+    ConfirmGate -.->|Optional Face Match| LiveSelfie --> LivenessEng --> SFace
+    ConfirmGate -.->|Optional Dual ID Check| CrossDoc
+    ConfirmGate -->|Confirmed Valid| RefCardGen
+    RefCardGen --> MongoStorage
+    RefCardGen --> LocalStorage
+    ShipSchema --> ShippingCards
 
     %% Styling
-    style Intake fill:#f8fafc,stroke:#94a3b8,stroke-width:2px;
-    style VisionAI fill:#f0fdf4,stroke:#86efac,stroke-width:2px;
-    style BiometricsLayer fill:#eff6ff,stroke:#93c5fd,stroke-width:2px;
-    style StorageSecurity fill:#fdf4ff,stroke:#d8b4fe,stroke-width:2px;
+    style IDWorkflow fill:#f0fdf4,stroke:#86efac,stroke-width:2px;
+    style ShipWorkflow fill:#eff6ff,stroke:#93c5fd,stroke-width:2px;
+    style KYCBiometrics fill:#fdf4ff,stroke:#d8b4fe,stroke-width:2px;
+    style StorageGateways fill:#f8fafc,stroke:#94a3b8,stroke-width:2px;
 ```
 
 ---
 
-## 🌟 Key Capabilities & Core Features
+## 🔄 Detailed Step-by-Step Workflows
 
-### 1. 🎯 Neural Portrait Extraction (YOLOv8 + Type-Aware Anchoring)
-- Powered by `yolov8n-face.pt` with smart spatial anchoring.
-- Automatically selects the appropriate portrait region based on document type:
-  - **Aadhaar / Driving Licence:** Scans right side / header region.
-  - **PAN Card:** Scans lower left quadrant.
-- Ignores EMV smart chips, national emblems, holograms, and QR code patterns.
+###  workflow 1: Government ID Card Verification & Biometric KYC
 
-### 2. ⚡ Blazing-Fast Local OCR + Pre-LLM Resource Gate
-- **RapidOCR (ONNX Runtime):** Runs pure Python ONNX inference locally without heavy external Tesseract dependencies.
-- **Pre-LLM Decision Gate:** Automatically classifies text signatures before calling cloud models. Short-circuits invalid or non-ID documents in milliseconds, saving LLM tokens and computation.
-- **Groq LPU Acceleration:** Sub-second extraction using **Llama 3.3 70B** for complex, blurred, or multilingual documents with fallback to pure local regex heuristics.
+```
+[ID Image Upload] ──> [Image Quality Assessment] ──> [OpenCV Preprocessing]
+         │
+         ├───> [YOLOv8 Face Detection] ───────> [Portrait Photo Crop]
+         │
+         └───> [RapidOCR ONNX Engine] ────────> [Pre-LLM Decision Gate]
+                                                        │
+                                                        ├───> [Groq Llama 3.3] ──┐
+                                                        │                         ├──> [Pydantic Normalization]
+                                                        └───> [Local Regex] ─────┘              │
+                                                                                                ▼
+[Cryptographic Reference Card] <─── [Human Confirmation] <─── [SFace Biometric Face Match (Optional)]
+```
 
-### 3. 👤 Biometric Face Matching & Anti-Spoofing Liveness (`NEW`)
-- **Deep SFace 128-D Biometric Embeddings:** Utilizes OpenCV's official SFace ONNX neural net (`face_recognition_sface.onnx`) for deep facial feature extraction and cosine similarity scoring.
-- **3-Tier Calibrated Match Confidence:**
-  - `STRONG_MATCH` ($\ge 75\%$): Confirmed positive identity match (`Status: VERIFIED`).
-  - `UNCERTAIN` ($50\% - 74\%$): Moderate match; prompts for Secondary ID verification (`Status: UNCERTAIN`).
-  - `WEAK` ($< 50\%$): Biometric mismatch / failed verification (`Status: FAILED`).
-- **Passive & Active Liveness Detection:**
-  - **2D Fast Fourier Transform (FFT) Analysis:** Identifies high-frequency moiré patterns characteristic of digital screen re-capture or printed paper dot matrices.
-  - **Specular Glare Detection:** Pinpoints reflective glass sheen produced by smartphone and tablet displays.
-  - **Active Randomized Challenges:** Generates time-bounded liveness challenges (*Blink naturally, Smile, Turn head left/right*).
-
-### 4. 📑 Multi-Document Cross-Verification Engine (`NEW`)
-- Allows cross-checking a Primary ID against a Secondary ID (e.g., Aadhaar $\leftrightarrow$ PAN or PAN $\leftrightarrow$ DL).
-- **Indian Naming Permutation & Heuristics:**
-  - Resolves name order flips (*"S Kiruthikeyan"* $\leftrightarrow$ *"Kiruthikeyan S"*).
-  - Handles initial expansions (*"Shanmugam Kiruthikeyan"* $\leftrightarrow$ *"S Kiruthikeyan"*).
-  - Normalizes honorifics (*Shri, Smt, Dr, Mr, Mrs, Master, Kumar*).
-- **Normalized Date of Birth Cross-Check:** Resolves string date variations and year-only formats (`YYYY` vs `DD/MM/YYYY`).
-- **Biometric Cross-Comparison:** Performs deep face similarity between photos extracted across both physical cards.
-
-### 5. 🪪 Privacy-Safe Reference Cards & UIDAI Aadhaar Masking
-- Generates customer-facing **Identity Reference Cards** upon verification.
-- Enforces strict Aadhaar masking (**`********2222`**)—only the last 4 digits are stored or displayed.
-- Generates scannable cryptographic QR codes for instant verification lookup.
-- Supports single-click **Instant Revocation** (`/reference/{ref_id}/revoke`).
-
-### 6. 🕒 Enterprise Storage & 30-Day Retention Compliance
-- **Dual-Write Architecture:** Automatically mirrors records between **MongoDB Atlas Cloud** and a high-performance **Local In-Memory Store**.
-- **Station Device ID Isolation:** Scopes verification records per workstation via `X-Device-Id` headers.
-- **30-Day Statutory Auto-Purge:** Automatic background cleaner removes stale PII records in compliance with DPDP data minimization rules.
-
-### 7. 📦 Shipping Label Scanner: RapidOCR → LLM Intelligence & Multi-Pass Code Reader (`NEW`)
-- **Multi-Image Processing:** Allows simultaneous upload of **1, 2, or 3 shipping label images** (JPG, JPEG, PNG). Each image is processed strictly independently without merging.
-- **RapidOCR → LLM Semantic Extraction Flow:**
-  - **Stage 1 (RapidOCR):** Local high-precision RapidOCR extracts raw text and spatial bounding layouts.
-  - **Stage 2 (LLM Intelligence):** The OCR output is streamed directly to the LLM (Groq Cloud LPU with Llama 3.3 70B, GPT OSS 120B, Qwen 3.6, etc.). The LLM understands the courier label semantics, understands the layout, and separates the data into structured entities:
-    - **SHIP TO (Receiver / TO):** Name, Phone, Email, Address, City, State, Postal Code, Country.
-    - **SHIP FROM (Sender / FROM):** Name, Company, Phone, Email, Address, City, State, Postal Code, Country.
-    - **ORDER INFORMATION:** Order ID, Tracking Number, AWB Number, Shipping Date, Payment Type (COD / Prepaid), Remarks.
-    - **PACKAGE INFORMATION:** Weight (e.g., `2.5 KG`), Dimensions (e.g., `12cm x 12cm x 12cm`).
-    - **ITEMS / PRODUCT MANIFEST:** Line items (Product description, Quantity, Price, Currency, Total).
-    - **CARRIER / COURIER:** Automatically identifies logistics carriers (Delhivery, Blue Dart, Ekart, DTDC, Amazon Logistics, FedEx, DHL, etc.).
-  - **Stage 3 (Strict Validation & Fallback):** Validates genuine 10-12 digit phone numbers (non-digit lines like `"12th cross"` under a Phone label are safely retained inside the address while setting `phone = null`). Automatic fallback to spatial heuristic parsing if offline or without an LLM key.
-- **Multi-Pass Barcode & QR Code Reader:**
-  - **Primary Engine:** `zxing-cpp` native decoding.
-  - **Fallback Pass 2:** Grayscale + Upscale + CLAHE contrast equalization + Sharpening kernel.
-  - **Fallback Pass 3:** Otsu / Adaptive Thresholding + 90°/180°/270° multi-angle image rotations.
-  - **Fallback Pass 4:** OpenCV `QRCodeDetector` matrix fallback.
-  - **Deduplication:** Automatic deduplication by `(format, value)`.
-
-
-### 8. ☰ Hamburger Drawer Menu & Multi-Page Navigation (`NEW`)
-- Quick access sidebar triggered by `☰` hamburger button.
-- Clean slide-out navigation between **Home**, **ID Verification**, **Shipping Label Scanner**, **History**, **Settings**, and **About**.
-- Separate result card per shipping label with tabs for **Details**, **OCR Text**, **Barcode / QR**, and **JSON Payload**.
+1. **Intake & Quality Gate**:
+   - The user uploads an Indian ID document (Aadhaar Card, PAN Card, or Driving Licence).
+   - The Laplacian variance engine evaluates blur, glare, and resolution before processing.
+2. **Neural Face Detection (`YOLOv8`)**:
+   - Locates facial features with spatial anchoring (right header for Aadhaar/DL, lower-left for PAN).
+   - Rejects EMV chips, hologram stickers, national emblems, and QR pattern false positives.
+3. **OCR & Decision Gate**:
+   - **RapidOCR ONNX** extracts high-precision text and word coordinates locally in $< 300\text{ ms}$.
+   - The **Pre-LLM Decision Gate** checks heuristic signatures. If supported, streams to **Groq Llama 3.3 70B**; otherwise falls back to the offline regex engine.
+4. **UIDAI Aadhaar Masking & Normalization**:
+   - Enforces strict Aadhaar masking (**`********1234`**) and ISO-8601 date formatting.
+5. **Biometric Face Match & Liveness (Optional)**:
+   - Compares the cropped ID photo against a live selfie using OpenCV's **Deep SFace 128-D** model with anti-spoofing FFT moiré frequency analysis.
+6. **Reference Card Generation**:
+   - Creates a privacy-compliant digital Identity Reference Card with scannable cryptographic QR token.
 
 ---
 
+### workflow 2: Shipping Label Scanner & Logistics Intelligence
 
-## 💼 Performance Benchmarks (KPIs)
+```
+[1 to 3 Shipping Label Images] (JPG, JPEG, PNG)
+         │
+         ├───> [Image 1] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Result Card #1]
+         ├───> [Image 2] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Result Card #2]
+         └───> [Image 3] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Result Card #3]
+```
 
-| Metric | Manual Human KYC | Standard OCR API | Utility Bot AI Engine |
-| :--- | :---: | :---: | :---: |
-| **Verification Speed** | 5 – 10 Minutes | 3 – 5 Seconds | **⚡ < 1.2 Seconds** |
-| **Portrait Extraction** | Manual Cropping | ❌ Bounding Box Only | **🎯 YOLOv8 Face Detection** |
-| **Live Biometric Match** | Visual inspection | ❌ Not Included | **👤 Deep SFace 128-D Cosine Match** |
-| **Anti-Spoofing Liveness**| None | ❌ Extra Paid Addon | **🛡️ FFT Moiré + Specular Glare** |
-| **Dual-ID Cross Check** | Manual comparison | ❌ Manual | **📑 Automated Fuzzy Cross-Check** |
-| **Privacy Compliance** | Paper photocopies | Cloud PII Storage | **🔒 UIDAI Masking + Ref Cards** |
-| **Local Compute Cost** | High Labor Cost | Per-call API fees | **$0.00 Local ONNX Execution** |
+1. **Multi-Image Upload (Max 3 Images)**:
+   - Operators can upload **1, 2, or 3 images simultaneously** (JPG, JPEG, PNG).
+   - Each image is executed **strictly independently** through the extraction pipeline without data cross-contamination.
+2. **Multi-Pass Barcode & QR Code Engine (`code_reader.py`)**:
+   - **Pass 1:** Native high-speed `zxing-cpp` scan across 1D/2D symbologies (Code 128, Code 39, EAN-13, QR Code, Data Matrix, PDF417).
+   - **Pass 2 (Image Enhancement):** Grayscale $\to$ $2\times$ Upscale $\to$ CLAHE contrast equalization $\to$ Kernel sharpening.
+   - **Pass 3 (Multi-Angle Thresholding):** Otsu and adaptive thresholding with $90^\circ$, $180^\circ$, and $270^\circ$ rotations.
+   - **Pass 4 (OpenCV Fallback):** `cv2.QRCodeDetector` recovery.
+   - **Deduplication:** Automatically deduplicates codes using `(format, value)`.
+3. **Spatial 2-Column Layout Reconstructor (`shipping_extractor.py`)**:
+   - Detects side-by-side / two-column layouts (e.g., Destination block on left, Return/Shipper block on right).
+   - Re-orders the reading stream column-by-column (reads full Left Column top-to-bottom, then Right Column top-to-bottom), completely eliminating horizontal text concatenation bugs.
+4. **Intelligent Field Extraction & Post-Processing**:
+   - **SHIP TO (Receiver):** Name, Phone, Email, Address, City, State, Postal Code, Country.
+   - **SHIP FROM (Sender):** Name, Company, Phone, Email, Address, City, State, Postal Code, Country.
+   - **ORDER & TRACKING:** Order ID, Tracking Number, AWB Number, Shipping Date, Payment Type (`COD` / `PREPAID`), Remarks.
+   - **PACKAGE INFORMATION:** Weight (e.g. `5oz`, `1.5 KG`) and Dimensions.
+   - **PRODUCT ITEMS MANIFEST:** Pipe-separated (`|`) and space-delimited table rows parsed into product name, quantity, unit price, and total amount.
+   - **Entity Disentanglement:** Validates 10–12 digit phone numbers (retains non-digit text in address) and routes corporate names to `SHIP FROM` and individual customer names to `SHIP TO`.
+5. **Multi-Card Interactive UI**:
+   - Displays dedicated result cards per uploaded label with **Details**, **OCR Text**, **Barcode / QR**, and **JSON Payload** tabs.
+
+---
+
+## 🌟 Key Capabilities & Feature Highlights
+
+| Capability | ID Verification Engine | Shipping Label Scanner |
+| :--- | :--- | :--- |
+| **Input Support** | Single ID Document (Aadhaar, PAN, DL) | Batch 1 to 3 Shipping Labels (JPG/PNG) |
+| **Core OCR** | RapidOCR ONNX Runtime ($< 300\text{ ms}$) | RapidOCR ONNX + Spatial Layout Reconstructor |
+| **Code Scanning** | Embedded Document QR Reader | Multi-Pass Barcode & QR Reader (`zxing-cpp`) |
+| **Vision AI** | YOLOv8 Neural Portrait Cropper | 2-Column Cluster Detection & Column Sorter |
+| **LLM Inference** | Groq Cloud LPU (Llama 3.3 70B) | Groq Cloud LPU with Spatial Prompt Rules |
+| **Offline Fallback**| 100% Offline Local Regex Engine | 100% Offline Spatial Heuristic Parser |
+| **Biometrics** | Deep SFace 128-D Cosine Face Matching | N/A (Logistics-focused) |
+| **Anti-Spoofing** | 2D FFT Moiré + Specular Glare Detection | N/A |
+| **Data Privacy** | UIDAI 8-Digit Masking (`********1234`) | Station-isolated temporary processing |
 
 ---
 
 ## 🛠️ Technology Stack
 
 ### **Backend (Python 3.10+)**
-- **FastAPI & Uvicorn**: Asynchronous high-performance REST API.
-- **RapidOCR & ONNX Runtime**: High-speed offline text detection and recognition.
-- **OpenCV SFace & YOLOv8 (`ultralytics`)**: Neural facial detection and 128-dimensional biometric embedding cosine matching.
-- **Groq SDK**: Cloud LPU LLM inference (`Llama 3.3 70B`).
-- **Pydantic v2**: Strict schema validation and data normalization.
-- **PyMongo**: Cloud MongoDB Atlas integration with local failover.
+- **FastAPI & Uvicorn**: High-throughput asynchronous REST API framework.
+- **RapidOCR & ONNX Runtime**: Local deep-learning OCR without external binary dependencies.
+- **ZXing-CPP (`zxing-cpp`)**: Native C++ port for multi-format 1D/2D barcode and QR matrix decoding.
+- **OpenCV & Deep SFace**: Image preprocessing, geometric transformations, and 128-D biometric facial embeddings.
+- **Ultralytics YOLOv8**: Neural face detection and anchored portrait photo extraction.
+- **Groq Python SDK**: Cloud LPU ultra-low latency LLM inference.
+- **Pydantic v2**: Strict schema validation and JSON serialization.
+- **PyMongo**: MongoDB Atlas cloud integration with local storage fallback.
 
 ### **Frontend (React 18 + Vite)**
-- **React 18 & Vite**: Modern reactive single-page dashboard.
-- **Tailwind CSS**: High-contrast, clean enterprise UI.
-- **Lucide Icons**: Crisp iconography.
-- **QRCode.react**: Cryptographic QR code generation for Identity Reference Cards.
-- **Webcam & Canvas APIs**: Real-time live camera capture and liveness evaluation.
-
----
-
-## 🔒 Data Privacy & Enterprise Security
-
-1. **In-Memory Volatile Processing**: Original high-resolution document images are handled strictly in RAM and never written to unencrypted disk storage.
-2. **UIDAI Compliance**: Strict 8-digit masking applied immediately during normalization before storage or transmission.
-3. **Audit Trails**: Differentiates confirmed verifications (`IMG...` series) and rejected audit attempts (`FAIL...` series).
-4. **Device Scoping**: Station separation using `X-Device-Id` headers ensures client workspace privacy.
+- **React 18 & Vite**: Lightning-fast single-page reactive dashboard.
+- **Tailwind CSS**: Enterprise clean UI with responsive typography and dark-mode accents.
+- **Lucide React**: Clean SVG iconography.
+- **QRCode.react**: Cryptographic QR token generation for verification cards.
 
 ---
 
@@ -226,7 +229,7 @@ MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.xxxxx.mongodb.net/utili
 
 # Groq Cloud LLM API Key (Optional)
 # If omitted, the system runs 100% offline using RapidOCR and local regex heuristics.
-GROQ_API_KEY=
+GROQ_API_KEY=gsk_your_groq_api_key_here
 
 # Groq LLM Model Name
 GROQ_MODEL=llama-3.3-70b-versatile
@@ -237,7 +240,7 @@ GROQ_MODEL=llama-3.3-70b-versatile
 ## 🚀 Quickstart Guide
 
 ### **Prerequisites**
-- **Python 3.10+** (Fully compatible with Python 3.10 - 3.14+)
+- **Python 3.10+** (Compatible with Python 3.10 – 3.14+)
 - **Node.js 18+** & **npm**
 
 ---
@@ -247,20 +250,15 @@ GROQ_MODEL=llama-3.3-70b-versatile
 Launch the full stack directly from the workspace root (serves both React GUI & FastAPI backend on port 8000):
 
 ```powershell
-# 1. Install dependencies
+# 1. Install Python dependencies
 pip install -r python_service/requirements.txt
 
-# 2. Run the unified server
+# 2. Run the unified launcher
 python run.py
 ```
 
-*Alternatively, run with Uvicorn auto-reload from the root:*
-```powershell
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
-
 - **Unified Web Dashboard:** `http://localhost:8000`
-- **Interactive Swagger Docs:** `http://localhost:8000/docs`
+- **Interactive Swagger API Docs:** `http://localhost:8000/docs`
 
 ---
 
@@ -291,67 +289,103 @@ npm run dev
 
 ### **Option 3: Docker Deployment (Railway, Render, AWS, GCP)**
 
-Utility Bot includes a production multi-stage `Dockerfile`:
-
 ```powershell
 # Build container image
 docker build -t utility-bot .
 
-# Run container (port 8000)
+# Run container on port 8000
 docker run -p 8000:8000 utility-bot
 ```
 
 ---
 
-### 🧪 Running Automated Tests
+## 🧪 Automated Verification Suite
 
-Run the full 11-module test suite to verify OCR, validation rules, biometrics, cross-checks, and shipping label heuristics:
+Run the comprehensive 11-module automated test suite covering all regex heuristics, validation rules, SFace biometrics, cross-checks, and multi-column shipping labels:
 
 ```powershell
 python python_service/test_pipeline.py
 ```
-*Expected Output: `ALL 11 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]`*
+
+```
+============================================================
+RUNNING UTILITY BOT ENTERPRISE TEST SUITE
+============================================================
+Testing Date Normalization...
+  [PASS] Date Normalization tests passed.
+Testing PAN Validation...
+  [PASS] PAN Validation tests passed.
+Testing Aadhaar Validation & Masking...
+  [PASS] Aadhaar Validation tests passed.
+Testing Driving Licence Validation...
+  [PASS] Driving Licence Validation tests passed.
+Testing Heuristic Document Classifier...
+  [PASS] Heuristic Classification tests passed.
+Testing OpenCV Preprocessing Pipeline...
+  [PASS] OpenCV Preprocessing tests passed.
+Testing End-to-End Extraction Result Assembly...
+  [PASS] Extraction Result Assembly passed.
+Testing Reference Card Generation & Masking...
+  [PASS] Reference Card Service tests passed.
+Testing Liveness & Anti-Spoofing...
+  [PASS] Liveness & Anti-Spoofing tests passed.
+Testing Multi-Document Cross-Verification...
+  [PASS] Multi-Document Cross-Verification tests passed.
+Testing Shipping Label LLM & Heuristic Extraction...
+  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic, USPS, Unspaced OCR, Tables & 2-Column).
+============================================================
+ALL 11 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]
+============================================================
+```
 
 ---
 
 ## 📡 REST API Reference
 
-### **Shipping Label & Logistics Extraction**
+### **1. Shipping Label & Logistics Scanner**
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/extract-shipping` | Upload 1 to 3 shipping label images (JPG/PNG). Executes parallel multi-pass Barcode & QR scanning (`zxing-cpp` + OpenCV), RapidOCR, and courier/address extraction. |
+| `POST` | `/extract-shipping` | Upload 1 to 3 shipping labels (`files: List[UploadFile]`). Runs parallel multi-pass ZXing-CPP Barcode/QR decoding, RapidOCR, 2-column spatial reconstruction, and LLM/heuristic extraction. Returns separate JSON result per image. |
 
-### **Document Extraction & Confirmation**
+### **2. Document Extraction & Confirmation**
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/extract` | Upload identity image; executes Pre-LLM Gate, YOLO portrait crop, RapidOCR, and Pydantic normalization. |
+| `POST` | `/extract` | Upload identity image; executes Pre-LLM Gate, YOLOv8 portrait crop, RapidOCR, and Pydantic normalization. |
 | `POST` | `/confirm` | Confirms extracted details, creates Privacy Reference Card, and records `IMG...` / `FAIL...` sequential ID. |
 | `GET` | `/models` | Returns available LLM models for extraction. |
 
-
-### **Biometric Face & Liveness Verification**
+### **3. Biometric Face & Liveness Verification**
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/verify/liveness-challenge` | Generates active randomized liveness challenge token (*blink, smile, head turn*). |
 | `POST` | `/verify/live-face` | Anti-spoofing liveness check & Deep SFace 128-D cosine face matching against ID card portrait. |
 | `POST` | `/verify/second-id` | Cross-verifies primary ID with secondary ID (fuzzy Indian name match, DOB consistency, portrait face match). |
 
-### **Identity Reference Cards & Verification QR**
+### **4. Identity Reference Cards & Verification QR**
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `GET` | `/reference/{ref_id}` | Public endpoint retrieving privacy-masked reference card details. |
 | `POST` | `/reference/{ref_id}/revoke` | Revokes an active Reference Card immediately. |
 
-### **History & Storage Management**
+### **5. History & Storage Management**
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/history` | Returns paginated list of successful verifications (`IMG...` series) for current station. |
+| `GET` | `/history` | Returns paginated list of successful verifications (`IMG...` series). |
 | `GET` | `/failed-history` | Returns failed verification audit records (`FAIL...` series). |
 | `GET` | `/history/{doc_id}` | Retrieves a single verification record by sequential ID. |
 | `DELETE`| `/history/{doc_id}` | Deletes a verification record. |
 | `GET` | `/storage/stats` | Returns database and storage usage metrics. |
 | `POST` | `/storage/clean` | Triggers 30-day statutory retention cleanup. |
 | `GET` | `/health` | Returns service health, OCR readiness, and database connection status. |
+
+---
+
+## 🔒 Data Privacy & Enterprise Security
+
+1. **In-Memory Volatile Processing**: Original high-resolution document images are handled strictly in RAM and never written to unencrypted disk storage.
+2. **UIDAI Compliance**: Strict 8-digit masking applied immediately during normalization before storage or transmission.
+3. **Audit Trails**: Differentiates confirmed verifications (`IMG...` series) and rejected audit attempts (`FAIL...` series).
+4. **Device Scoping**: Station separation using `X-Device-Id` headers ensures client workspace privacy.
 
 ---
 
