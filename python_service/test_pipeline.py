@@ -250,7 +250,32 @@ def test_shipping_label_extraction():
     assert "12th cross" in (llm_res.ship_to.address or "")
     assert llm_res.order.order_id == "ORD-9928172"
     assert llm_res.order.awb_number == "1122334455"
-    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed.")
+
+    # 3. Test USPS / International standard label without explicit "SHIP TO" headers
+    usps_ocr = """5oz First-Class Pkg Svc
+CommercialBasePrice 071S00858181
+USPS FIRST-CLASS PKG
+Mailed from ZIP 77024
+WAREHOUSE 2
+11919 WINK RD
+HOUSTON TX 77024-7134
+Order: 286
+John Doe
+321 Street Over There
+Salt Lake City, UT 11212
+United States"""
+    usps_res = extract_shipping_label_data(usps_ocr, usps_ocr)
+    assert usps_res.courier == "USPS", f"Expected USPS, got: {usps_res.courier}"
+    assert usps_res.package.weight == "5oz", f"Expected 5oz, got: {usps_res.package.weight}"
+    assert usps_res.order.order_id == "286", f"Expected 286, got: {usps_res.order.order_id}"
+    assert usps_res.ship_from.name == "WAREHOUSE 2", f"Expected WAREHOUSE 2, got: {usps_res.ship_from.name}"
+    assert usps_res.ship_to.name == "John Doe", f"Expected John Doe, got: {usps_res.ship_to.name}"
+    assert usps_res.ship_to.city == "Salt Lake City", f"Expected Salt Lake City, got: {usps_res.ship_to.city}"
+    assert usps_res.ship_to.state == "Utah", f"Expected Utah, got: {usps_res.ship_to.state}"
+    assert usps_res.ship_to.postal_code == "11212", f"Expected 11212, got: {usps_res.ship_to.postal_code}"
+    assert usps_res.ship_to.country == "United States", f"Expected United States, got: {usps_res.ship_to.country}"
+    print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic & USPS).")
+
 
 
 

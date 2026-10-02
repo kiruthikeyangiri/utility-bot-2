@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sliders, Cpu, Layers } from 'lucide-react';
+import { Sliders, Cpu, Layers, Key, Eye, EyeOff } from 'lucide-react';
 import { getModelsApi } from '../services/api';
 
 export default function SettingsPanel({ settings, onChange }) {
@@ -11,6 +11,7 @@ export default function SettingsPanel({ settings, onChange }) {
     'llama-3.3-70b-versatile',
   ]);
   const [isOpen, setIsOpen] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
     getModelsApi()
@@ -69,6 +70,37 @@ export default function SettingsPanel({ settings, onChange }) {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* 1.1 Groq API Key */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center text-xs">
+              <label className="font-medium text-slate-700 flex items-center space-x-1.5">
+                <Key className="w-3.5 h-3.5 text-amber-600" />
+                <span>Groq API Key (Optional)</span>
+              </label>
+            </div>
+            <div className="relative">
+              <input
+                type={showApiKey ? 'text' : 'password'}
+                value={settings.groq_api_key || localStorage.getItem('groq_api_key') || ''}
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  localStorage.setItem('groq_api_key', val);
+                  handleChange('groq_api_key', val);
+                }}
+                placeholder="gsk_..."
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-3 pr-8 py-2 text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 transition"
+              />
+              <button
+                type="button"
+                onClick={() => setShowApiKey(!showApiKey)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                title={showApiKey ? "Hide key" : "Show key"}
+              >
+                {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </div>
 
           {/* 2. OCR Segmentation Mode */}

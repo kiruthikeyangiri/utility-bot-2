@@ -272,8 +272,9 @@ export const extractShippingApi = async (files, options = {}) => {
   if (options.model_name !== undefined && options.model_name) {
     formData.append('model_name', options.model_name);
   }
-  if (options.groq_api_key !== undefined && options.groq_api_key) {
-    formData.append('groq_api_key', options.groq_api_key);
+  const apiKey = (options.groq_api_key || localStorage.getItem('groq_api_key') || '').trim();
+  if (apiKey) {
+    formData.append('groq_api_key', apiKey);
   }
 
   const response = await api.post('/extract-shipping', formData, {

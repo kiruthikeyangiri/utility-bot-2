@@ -1,12 +1,15 @@
 """
-shipping_extractor.py - Spatial, Heuristic & Regex Shipping Label Information Extractor.
-Uses RapidOCR text words and bounding boxes (x, y, w, h) to reconstruct label layout,
+shipping_extractor.py - Spatial, Heuristic & LLM Shipping Label Information Extractor.
+Uses RapidOCR text words and bounding boxes to reconstruct label layout,
 identify courier, partition SHIP TO and SHIP FROM zones, extract order details,
 package weight/dimensions, and product line items.
-Enforces strict phone number validation (e.g. rejecting non-digit address lines).
+Supports domestic and international labels (USPS, FedEx, UPS, Delhivery, Blue Dart, etc.)
+and includes Groq LLM intelligence with an automated spatial fallback engine.
 """
 
 import re
+import os
+import json
 from typing import Dict, List, Any, Optional, Tuple
 from shipping_schemas import (
     ShippingLabelResult,
@@ -19,22 +22,42 @@ from shipping_schemas import (
 
 # Known courier keywords for carrier detection
 COURIER_PATTERNS = [
+    ("USPS", r"\b(?:USPS|U\.S\.P\.S\.|POSTAL\s*SERVICE|FIRST-CLASS\s*PKG|PRIORITY\s*MAIL)\b"),
+    ("UPS", r"\b(?:UPS|UNITED\s*PARCEL\s*SERVICE)\b"),
+    ("FedEx", r"\b(?:FEDEX|FEDERAL\s*EXPRESS)\b"),
     ("Delhivery", r"\bDELHIVERY\b"),
     ("Blue Dart", r"\bBLUE\s*DART\b"),
     ("Amazon Logistics", r"\b(?:AMAZON\s*LOGISTICS|AMAZON\.IN|ATS)\b"),
-    ("Ekart Logistics", r"\b(?:EKART|E-KART)\b"),
+    ("Ekart Logistics", r"\b(?:EKART|E-KART|FLIPKART)\b"),
     ("Ecom Express", r"\bECOM\s*EXPRESS\b"),
     ("DTDC", r"\bDTDC\b"),
-    ("FedEx", r"\bFEDEX\b"),
     ("Shadowfax", r"\bSHADOWFAX\b"),
     ("Xpressbees", r"\b(?:XPRESSBEES|XPRESS\s*BEES)\b"),
     ("India Post", r"\b(?:INDIA\s*POST|SPEED\s*POST|POSTAL\s*DEPT)\b"),
     ("DHL", r"\bDHL\b"),
+    ("Canada Post", r"\bCANADA\s*POST\b"),
+    ("Royal Mail", r"\bROYAL\s*MAIL\b"),
+    ("Australia Post", r"\bAUSTRALIA\s*POST\b"),
     ("Shiprocket", r"\bSHIPROCKET\b"),
     ("Smartr", r"\bSMARTR\b"),
     ("Bluedart Apex", r"\bAPEX\b"),
     ("Gati", r"\bGATI\b")
 ]
+
+# US States mapping
+US_STATES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia",
+    "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa",
+    "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
+    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri",
+    "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey",
+    "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio",
+    "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
+    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont",
+    "VA": "Virginia", "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+    "DC": "District of Columbia"
+}
 
 # Indian States and Union Territories for state extraction
 INDIAN_STATES = [
@@ -57,6 +80,27 @@ STATE_ABBRS = {
     "DL": "Delhi", "PY": "Puducherry", "CH": "Chandigarh", "JK": "Jammu and Kashmir"
 }
 
+POSTAGE_PATTERNS = [
+    r"^\d+(?:\.\d+)?\s*(?:oz|lb|lbs|kg|g)\b",
+    r"first[- ]class",
+    r"priority\s*mail",
+    r"commercial\s*base",
+    r"usps\s*first",
+    r"mailed\s*from\s*zip",
+    r"postage\s*and\s*fees",
+    r"permit\s*no",
+    r"carrier\s*leave\s*if\s*no\s*response"
+]
+
+TO_HEADER_PATTERN = r"^(?:SHIP\s*TO|SHIPPING\s*ADDRESS|DELIVERY\s*ADDRESS|DELIVER\s*TO|CONSIGNEE|RECEIVER|DESTINATION)\b\s*[:\-]?"
+FROM_HEADER_PATTERN = r"^(?:SHIP\s*FROM|RETURN\s*ADDRESS|PICKUP\s*ADDRESS|SENDER|ORIGIN|SOLD\s*BY|DISPATCHED\s*FROM|FROM)\b\s*[:\-]?"
+
+
+def _is_postage_line(line: str) -> bool:
+    """Checks if line contains postage, shipping rate or carrier service metadata."""
+    l_lower = line.lower().strip()
+    return any(bool(re.search(pat, l_lower)) for pat in POSTAGE_PATTERNS)
+
 
 def _is_valid_phone(text: str) -> bool:
     """
@@ -68,7 +112,6 @@ def _is_valid_phone(text: str) -> bool:
     clean = re.sub(r"[\s\-\(\)\+\.]", "", text.strip())
     # Must be at least 10 digits and only digits
     if clean.isdigit() and 10 <= len(clean) <= 13:
-        # Check if it resembles standard mobile/landline
         if len(clean) == 10 and clean[0] in "56789":
             return True
         if len(clean) > 10:
@@ -78,7 +121,6 @@ def _is_valid_phone(text: str) -> bool:
 
 def _extract_phone(line: str) -> Optional[str]:
     """Extracts genuine phone digits from a line, or None if invalid."""
-    # Look for explicit telephone patterns like +91 9876543210 or 9876543210
     match = re.search(r"(?:(?:\+91|0)[\s\-]?)?([6-9]\d{9})\b", line)
     if match:
         return match.group(0).strip()
@@ -94,18 +136,6 @@ def _extract_email(text: str) -> Optional[str]:
     return match.group(0).strip() if match else None
 
 
-def _extract_pincode(text: str) -> Optional[str]:
-    """Extracts 6-digit postal PIN code."""
-    match = re.search(r"\b(?:PIN|PINCODE|PIN\s*CODE|ZIP|POSTAL)?\s*[:\-]?\s*([1-9][0-9]{5})\b", text, re.IGNORECASE)
-    if match:
-        return match.group(1)
-    # Generic 6 digits
-    match_gen = re.search(r"\b([1-9][0-9]{5})\b", text)
-    if match_gen:
-        return match_gen.group(1)
-    return None
-
-
 def detect_courier(raw_text: str) -> Optional[str]:
     """Detects shipping courier name from raw text."""
     text_upper = raw_text.upper()
@@ -115,7 +145,7 @@ def detect_courier(raw_text: str) -> Optional[str]:
     return None
 
 
-def _parse_address_block(lines: List[str]) -> Dict[str, Any]:
+def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str, Any]:
     """
     Parses a group of lines corresponding to an address section into
     name, company, phone, email, address, city, state, postal_code, country.
@@ -138,29 +168,25 @@ def _parse_address_block(lines: List[str]) -> Dict[str, Any]:
     cleaned_lines = [l.strip() for l in lines if l.strip()]
     address_parts = []
 
-    for i, line in enumerate(cleaned_lines):
+    for line in cleaned_lines:
         line_clean = line.strip()
 
-        # Check for Email
+        # 1. Email check
         if not contact["email"]:
             em = _extract_email(line_clean)
             if em:
                 contact["email"] = em
                 line_clean = line_clean.replace(em, "").strip()
 
-        # Check for Phone
+        # 2. Phone check
         if "PHONE" in line_clean.upper() or "MOB" in line_clean.upper() or "TEL" in line_clean.upper():
-            # Extract potential phone number
             ph = _extract_phone(line_clean)
             if ph:
                 contact["phone"] = ph
                 line_clean = re.sub(r"(?:PHONE|MOB|MOBILE|TEL|CONTACT)?\s*[:\-]?\s*" + re.escape(ph), "", line_clean, flags=re.IGNORECASE).strip()
             else:
-                # Phone label found, but text is e.g. "Phone: 12th cross"
-                # Remove label only if followed by nothing, or preserve remainder in address
                 after_label = re.sub(r"^(?:PHONE|MOB|MOBILE|TEL|CONTACT)\s*[:\-]?", "", line_clean, flags=re.IGNORECASE).strip()
                 if after_label:
-                    # Keep "12th cross" inside address!
                     address_parts.append(after_label)
                 continue
         elif not contact["phone"]:
@@ -169,41 +195,64 @@ def _parse_address_block(lines: List[str]) -> Dict[str, Any]:
                 contact["phone"] = ph
                 continue
 
-        # Check for PIN Code
-        if not contact["postal_code"]:
-            pin = _extract_pincode(line_clean)
-            if pin:
-                contact["postal_code"] = pin
-                line_clean = re.sub(r"(?:PIN|PINCODE|PIN\s*CODE|ZIP)?\s*[:\-]?\s*" + pin, "", line_clean, flags=re.IGNORECASE).strip()
+        # 3. Country check
+        if re.search(r"\b(?:UNITED\s*STATES|USA|U\.S\.A\.|US)\b", line_clean, re.IGNORECASE):
+            contact["country"] = "United States"
+            line_clean = re.sub(r"\b(?:UNITED\s*STATES|USA|U\.S\.A\.|US)\b", "", line_clean, flags=re.IGNORECASE).strip()
+        elif re.search(r"\b(?:INDIA|IND|BHARAT)\b", line_clean, re.IGNORECASE):
+            contact["country"] = "India"
+            line_clean = re.sub(r"\b(?:INDIA|IND|BHARAT)\b", "", line_clean, flags=re.IGNORECASE).strip()
 
-        # Check for State
+        # 4. US City, State, ZIP pattern: e.g. "HOUSTON TX 77024-7134" or "Salt Lake City, UT 11212"
+        m_csz = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Z]{2})\s+([0-9]{5}(?:-[0-9]{4})?)\b", line_clean)
+        if m_csz:
+            city_cand = m_csz.group(1).strip()
+            state_code = m_csz.group(2).upper()
+            zip_cand = m_csz.group(3).strip()
+            if state_code in US_STATES:
+                contact["city"] = city_cand
+                contact["state"] = US_STATES[state_code]
+                contact["postal_code"] = zip_cand
+                if not contact["country"]:
+                    contact["country"] = "United States"
+                continue
+
+        # 5. Postal / PIN Code check
+        if not contact["postal_code"]:
+            m_pin = re.search(r"\b(?:PIN|PINCODE|PIN\s*CODE|ZIP|POSTAL)?\s*[:\-]?\s*([1-9][0-9]{4,5}(?:-[0-9]{4})?)\b", line_clean, re.IGNORECASE)
+            if m_pin:
+                contact["postal_code"] = m_pin.group(1)
+                line_clean = re.sub(r"(?:PIN|PINCODE|PIN\s*CODE|ZIP|POSTAL)?\s*[:\-]?\s*" + re.escape(m_pin.group(1)), "", line_clean, flags=re.IGNORECASE).strip()
+
+        # 6. Indian State check
         if not contact["state"]:
             upper_line = line_clean.upper()
             for st in INDIAN_STATES:
                 if re.search(r"\b" + re.escape(st) + r"\b", upper_line):
                     contact["state"] = st.title()
+                    if not contact["country"]:
+                        contact["country"] = "India"
                     break
             if not contact["state"]:
                 for abbr, full_state in STATE_ABBRS.items():
                     if re.search(r"\b" + abbr + r"\b", upper_line):
                         contact["state"] = full_state
+                        if not contact["country"]:
+                            contact["country"] = "India"
                         break
-
-        # Check for Country
-        if re.search(r"\b(?:INDIA|IND|BHARAT)\b", line_clean, re.IGNORECASE):
-            contact["country"] = "India"
-            line_clean = re.sub(r"\b(?:INDIA|IND|BHARAT)\b", "", line_clean, flags=re.IGNORECASE).strip()
 
         if line_clean and line_clean not in [":", "-", ",", "."]:
             address_parts.append(line_clean)
 
-    # Name Assignment from first line
+    # Assign Name / Company from top line
     if address_parts:
         candidate_name = address_parts[0]
-        # Clean prefix labels like "Name:", "Consignee:", "To:"
         candidate_name = re.sub(r"^(?:NAME|TO|CONSIGNEE|MR|MS|MRS|RECEIVER|SENDER|FROM)\s*[:\-]?", "", candidate_name, flags=re.IGNORECASE).strip()
-        if candidate_name and len(candidate_name) < 40 and not any(kw in candidate_name.upper() for kw in ["ADDRESS", "STREET", "ROAD", "NAGAR"]):
+        street_kws = ["STREET", "RD", "ROAD", "AVE", "BLVD", "LANE", "DRIVE", "WAY", "HWY", "HIGHWAY", "CROSS", "NAGAR", "SECTOR", "PLOT"]
+        if len(candidate_name) < 45 and not any(kw in candidate_name.upper() for kw in street_kws):
             contact["name"] = candidate_name
+            if any(kw in candidate_name.upper() for kw in ["WAREHOUSE", "LOGISTICS", "STORE", "INC", "CORP", "LTD", "COMPANY", "CO", "FLIPKART", "AMAZON", "ENTERPRISES", "HUB"]):
+                contact["company"] = candidate_name
             address_parts = address_parts[1:]
 
     # Construct overall address string
@@ -213,11 +262,15 @@ def _parse_address_block(lines: List[str]) -> Dict[str, Any]:
     return contact
 
 
-def extract_shipping_label_data(ocr_raw_text: str, ocr_layout_text: str, ocr_words: List[Dict[str, Any]] = None) -> ShippingLabelResult:
+def extract_shipping_label_data(
+    ocr_raw_text: str,
+    ocr_layout_text: str = "",
+    ocr_words: Optional[List[Dict[str, Any]]] = None
+) -> ShippingLabelResult:
     """
-    Main extraction function for Shipping Labels.
-    Takes OCR raw text, layout text, and bounding boxes, applies
-    spatial heuristics, section detection, and regular expressions.
+    Layout & Heuristic Spatial Shipping Label Extractor.
+    Processes raw OCR lines and geometry, separates Courier, Sender (FROM),
+    Receiver (TO), Order details, Package info, and line items.
     """
     result = ShippingLabelResult()
     raw_text = ocr_raw_text or ""
@@ -226,121 +279,127 @@ def extract_shipping_label_data(ocr_raw_text: str, ocr_layout_text: str, ocr_wor
     # 1. Detect Courier
     result.courier = detect_courier(raw_text)
 
-    # 2. Partition Sections (SHIP TO vs. SHIP FROM)
-    to_keywords = ["SHIP TO", "SHIPPING ADDRESS", "DELIVERY ADDRESS", "DELIVER TO", "CONSIGNEE", "RECEIVER", "DESTINATION"]
-    from_keywords = ["SHIP FROM", "RETURN ADDRESS", "PICKUP ADDRESS", "SENDER", "FROM", "ORIGIN", "SOLD BY", "DISPATCHED FROM"]
+    # 2. Package Extraction (Weight & Dimensions)
+    package_info = PackageInformation()
+    weight_match = re.search(r"\b(\d+(?:\.\d+)?\s*(?:KG|KGS|G|GMS|LBS|LB|OZ|OUNCES?))\b", raw_text, re.IGNORECASE)
+    if weight_match:
+        package_info.weight = weight_match.group(1).strip()
 
-    lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
-
-    to_lines = []
-    from_lines = []
-    other_lines = []
-
-    current_section = None
-
-    for line in lines:
-        line_upper = line.upper()
-
-        is_to_header = any(kw in line_upper for kw in to_keywords)
-        is_from_header = any(kw in line_upper for kw in from_keywords)
-
-        if is_to_header:
-            current_section = "TO"
-            stripped = line
-            for kw in to_keywords:
-                stripped = re.sub(r"\b" + re.escape(kw) + r"\b\s*[:\-]?", "", stripped, flags=re.IGNORECASE).strip()
-            if stripped:
-                to_lines.append(stripped)
-            continue
-        elif is_from_header:
-            current_section = "FROM"
-            stripped = line
-            for kw in from_keywords:
-                stripped = re.sub(r"\b" + re.escape(kw) + r"\b\s*[:\-]?", "", stripped, flags=re.IGNORECASE).strip()
-            if stripped:
-                from_lines.append(stripped)
-            continue
-
-        # If line marks start of order info, break section
-        if any(kw in line_upper for kw in ["ORDER ID", "TRACKING", "AWB", "INVOICE", "PACKAGE WEIGHT", "TOTAL AMOUNT"]):
-            current_section = None
-
-        if current_section == "TO":
-            to_lines.append(line)
-        elif current_section == "FROM":
-            from_lines.append(line)
-        else:
-            other_lines.append(line)
-
-    # Parse SHIP TO
-    if to_lines:
-        parsed_to = _parse_address_block(to_lines)
-        result.ship_to = ShipToContact(**parsed_to)
-
-    # Parse SHIP FROM
-    if from_lines:
-        parsed_from = _parse_address_block(from_lines)
-        result.ship_from = ShipFromContact(**parsed_from)
+    dim_match = re.search(r"\b(\d+(?:\.\d+)?\s*(?:cm|mm|in|inch|m)?\s*[xX*]\s*\d+(?:\.\d+)?\s*(?:cm|mm|in|inch|m)?(?:\s*[xX*]\s*\d+(?:\.\d+)?\s*(?:cm|mm|in|inch|m)?)?)\b", raw_text, re.IGNORECASE)
+    if dim_match:
+        package_info.dimensions = dim_match.group(1).strip()
+    result.package = package_info
 
     # 3. Order Information Extraction
     order_info = OrderInformation()
 
-    # Order ID
-    order_match = re.search(r"\b(?:ORDER\s*(?:ID|NO|NUMBER|#)?)\s*[:\-]?\s*([A-Za-z0-9\-_]{5,25})\b", raw_text, re.IGNORECASE)
+    # Order ID (allows short IDs like "286" up to 30 chars)
+    order_match = re.search(r"\b(?:ORDER\s*(?:ID|NO|NUMBER|#)?)\s*[:\-]?\s*([A-Za-z0-9\-_]{1,30})\b", raw_text, re.IGNORECASE)
     if order_match:
         order_info.order_id = order_match.group(1).strip()
 
     # Tracking / AWB Number
-    tracking_match = re.search(r"\b(?:TRACKING\s*(?:NO|NUMBER|#)?|CONSIGNMENT\s*(?:NO|NUMBER)?)\s*[:\-]?\s*([A-Za-z0-9]{8,25})\b", raw_text, re.IGNORECASE)
+    tracking_match = re.search(r"\b(?:TRACKING\s*(?:NO|NUMBER|#)?|CONSIGNMENT\s*(?:NO|NUMBER)?)\s*[:\-]?\s*([A-Za-z0-9]{8,35})\b", raw_text, re.IGNORECASE)
     if tracking_match:
         order_info.tracking_number = tracking_match.group(1).strip()
 
-    awb_match = re.search(r"\b(?:AWB|AIR\s*WAYBILL)\s*(?:NO|NUMBER|#)?\s*[:\-]?\s*([A-Za-z0-9]{8,25})\b", raw_text, re.IGNORECASE)
+    awb_match = re.search(r"\b(?:AWB|AIR\s*WAYBILL)\s*(?:NO|NUMBER|#)?\s*[:\-]?\s*([A-Za-z0-9]{8,35})\b", raw_text, re.IGNORECASE)
     if awb_match:
         order_info.awb_number = awb_match.group(1).strip()
     elif order_info.tracking_number:
         order_info.awb_number = order_info.tracking_number
+
+    # Permit / CommercialBase identifier fallback
+    permit_match = re.search(r"\b(?:CommercialBasePrice|Permit\s*No\.?)\s*([0-9A-Za-z]{8,25})\b", raw_text, re.IGNORECASE)
+    if permit_match:
+        if not order_info.tracking_number:
+            order_info.tracking_number = permit_match.group(1).strip()
+        if not order_info.awb_number:
+            order_info.awb_number = permit_match.group(1).strip()
 
     # Shipping Date
     date_match = re.search(r"\b(?:DATE|SHIP\s*DATE|SHIPPING\s*DATE|DISPATCH\s*DATE)?\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\-\/\.]\d{2}[\-\/\.]\d{2})\b", raw_text, re.IGNORECASE)
     if date_match and date_match.group(1):
         order_info.shipping_date = date_match.group(1).strip()
 
-    # Payment Type (Prepaid / COD)
+    # Payment Type
     if re.search(r"\b(?:COD|CASH\s*ON\s*DELIVERY)\b", raw_text, re.IGNORECASE):
         order_info.payment_type = "COD"
     elif re.search(r"\b(?:PREPAID|PRE-PAID|ONLINE)\b", raw_text, re.IGNORECASE):
         order_info.payment_type = "PREPAID"
 
-    # Remarks
+    # Remarks / Service classification
     remarks_match = re.search(r"\b(?:REMARKS|INSTRUCTIONS|NOTE)\s*[:\-]?\s*([^\n\r]{3,60})", raw_text, re.IGNORECASE)
     if remarks_match:
         order_info.remarks = remarks_match.group(1).strip()
+    elif "First-Class" in raw_text:
+        order_info.remarks = "First-Class Pkg Svc"
+    elif "Priority Mail" in raw_text:
+        order_info.remarks = "Priority Mail"
 
     result.order = order_info
 
-    # 4. Package Extraction (Weight & Dimensions)
-    package_info = PackageInformation()
+    # 4. Partition Sections (SHIP TO vs. SHIP FROM)
+    lines = [l.strip() for l in raw_text.split("\n") if l.strip()]
 
-    # Weight
-    weight_match = re.search(r"\b(?:WEIGHT|WT|ACTUAL\s*WEIGHT|VOLUMETRIC\s*WEIGHT)?\s*[:\-]?\s*(\d+(?:\.\d+)?\s*(?:KG|KGS|G|GMS|LBS|LB))\b", raw_text, re.IGNORECASE)
-    if weight_match:
-        package_info.weight = weight_match.group(1).strip()
+    has_explicit_to = any(bool(re.search(TO_HEADER_PATTERN, l, re.IGNORECASE)) for l in lines)
+    has_explicit_from = any(bool(re.search(FROM_HEADER_PATTERN, l, re.IGNORECASE)) and not _is_postage_line(l) for l in lines)
 
-    # Dimensions
-    dim_match = re.search(r"\b(\d+(?:\.\d+)?\s*(?:cm|mm|in|inch|m)?\s*[xX*]\s*\d+(?:\.\d+)?\s*(?:cm|mm|in|inch|m)?\s*[xX*]\s*\d+(?:\.\d+)?\s*(?:cm|mm|in|inch|m)?)\b", raw_text, re.IGNORECASE)
-    if dim_match:
-        package_info.dimensions = dim_match.group(1).strip()
+    to_lines: List[str] = []
+    from_lines: List[str] = []
 
-    result.package = package_info
+    if has_explicit_to or has_explicit_from:
+        current_section = None
+        for line in lines:
+            if re.search(TO_HEADER_PATTERN, line, re.IGNORECASE):
+                current_section = "TO"
+                s = re.sub(TO_HEADER_PATTERN, "", line, flags=re.IGNORECASE).strip()
+                if s: to_lines.append(s)
+                continue
+            elif re.search(FROM_HEADER_PATTERN, line, re.IGNORECASE) and not _is_postage_line(line):
+                current_section = "FROM"
+                s = re.sub(FROM_HEADER_PATTERN, "", line, flags=re.IGNORECASE).strip()
+                if s: from_lines.append(s)
+                continue
+
+            # Section breakers
+            if any(kw in line.upper() for kw in ["ORDER ID", "TRACKING", "AWB", "INVOICE", "PACKAGE WEIGHT", "TOTAL AMOUNT"]):
+                current_section = None
+
+            if current_section == "TO":
+                to_lines.append(line)
+            elif current_section == "FROM":
+                from_lines.append(line)
+    else:
+        # Layout-free partition for USPS, FedEx, UPS labels without explicit "SHIP TO" text
+        current_section = "FROM"
+        for line in lines:
+            if _is_postage_line(line):
+                continue
+            # Order line delimiter switches to recipient
+            if re.search(r"\b(?:ORDER\s*(?:ID|NO|NUMBER|#)?)\s*[:\-]?\s*([A-Za-z0-9\-_]{1,30})\b", line, re.IGNORECASE):
+                current_section = "TO"
+                continue
+
+            if current_section == "FROM":
+                from_lines.append(line)
+                # If sender line completes a City, State, ZIP code, switch to recipient (TO)
+                if re.search(r"[A-Z]{2}\s+[0-9]{5}", line):
+                    current_section = "TO"
+            else:
+                to_lines.append(line)
+
+    # Parse SHIP TO
+    if to_lines:
+        result.ship_to = ShipToContact(**_parse_address_block(to_lines, is_sender=False))
+
+    # Parse SHIP FROM
+    if from_lines:
+        result.ship_from = ShipFromContact(**_parse_address_block(from_lines, is_sender=True))
 
     # 5. Product / Item Extraction (Tables & line items)
-    items = []
-    item_pattern = re.search(r"(?:PRODUCT|ITEM|DESCRIPTION)\s*\|?\s*(?:QTY|QUANTITY)?\s*\|?\s*(?:PRICE|RATE)?\s*\|?\s*(?:TOTAL|AMOUNT)", raw_text, re.IGNORECASE)
-    
-    # Line by line check for items
+    items: List[ShippingItem] = []
     for line in lines:
-        # Match e.g. "TShirt | 10 | 10" or "Cotton Shirt 2 499 998"
         pipe_match = [col.strip() for col in line.split("|") if col.strip()]
         if len(pipe_match) >= 3:
             name_candidate = pipe_match[0]
@@ -360,12 +419,11 @@ def extract_shipping_label_data(ocr_raw_text: str, ocr_layout_text: str, ocr_wor
                     pass
 
     result.items = items
-
     return result
 
 
 SHIPPING_LLM_SYSTEM_PROMPT = """You are an expert Shipping Label and Logistics Document Extraction AI.
-You receive the OCR text and spatial layout information extracted from a parcel/courier shipping label.
+You receive the OCR text and spatial layout information extracted from a parcel/courier shipping label (e.g. USPS, FedEx, UPS, Delhivery, Blue Dart, Amazon, DTDC, etc.).
 
 Your task is to analyze and understand the shipping label layout and text, and accurately separate the data into:
 - SENDER / ORIGIN ("ship_from")
@@ -377,7 +435,7 @@ Your task is to analyze and understand the shipping label layout and text, and a
 
 JSON Schema to return:
 {
-  "courier": "<Courier Name e.g. Delhivery, Blue Dart, Ekart, Amazon Logistics, DTDC, FedEx, DHL, etc., or null>",
+  "courier": "<Courier Name e.g. USPS, FedEx, UPS, Delhivery, Blue Dart, Ekart, Amazon Logistics, DTDC, DHL, etc., or null>",
   "ship_to": {
     "name": "<Recipient Full Name or null>",
     "phone": "<Recipient Phone Number or null>",
@@ -386,7 +444,7 @@ JSON Schema to return:
     "city": "<City or null>",
     "state": "<State or null>",
     "postal_code": "<PIN code / ZIP code or null>",
-    "country": "<Country e.g. India or null>"
+    "country": "<Country e.g. United States, India, or null>"
   },
   "ship_from": {
     "name": "<Sender Contact Name or null>",
@@ -405,10 +463,10 @@ JSON Schema to return:
     "awb_number": "<AWB / Air Waybill Number or null>",
     "shipping_date": "<Shipping or Dispatch Date or null>",
     "payment_type": "<COD / Prepaid / Cash on Delivery or null>",
-    "remarks": "<Special instructions, notes, or remarks or null>"
+    "remarks": "<Special instructions, notes, or service rate or null>"
   },
   "package": {
-    "weight": "<Package weight e.g. 2.5 KG or null>",
+    "weight": "<Package weight e.g. 5oz, 2.5 KG, 1.2 lbs, or null>",
     "dimensions": "<Dimensions e.g. 12x12x12 cm or null>"
   },
   "items": [
@@ -416,19 +474,19 @@ JSON Schema to return:
       "product": "<Product title or description>",
       "quantity": <integer quantity or null>,
       "price": <unit price as float or null>,
-      "currency": "<Currency e.g. INR>",
+      "currency": "<Currency e.g. USD, INR, etc.>",
       "total": <total price as float or null>
     }
   ]
 }
 
 CRITICAL RULES:
-1. SHIP TO represents the recipient (Receiver/Consignee/Delivery Address).
-2. SHIP FROM represents the sender (Origin/Shipper/Return Address/Seller).
-3. PHONE NUMBER RULE: Extract only valid 10-12 digit phone numbers. If the text under or following a 'Phone:' label is an address line (e.g. '12th cross', 'Near Temple', 'MG Road'), DO NOT extract it as phone number. Set phone to null, and keep that text inside the address field!
-4. ITEMS: If a product manifest or table is present (Product, Price, Qty, Total), extract each row into the "items" array. If no items or table are listed, return [].
-5. Do not invent details not present in the OCR text. If an attribute is missing, set it to null.
-6. Return strictly valid JSON adhering to the schema.
+1. SENDER vs. RECEIVER:
+   - On standard/USPS/FedEx labels, the SENDER (Return address) is usually at the top/header, and the RECEIVER is in the large central block.
+   - Do NOT mix up the sender and recipient!
+2. PHONE NUMBER RULE: Extract only valid 10-12 digit phone numbers. If the text under or following a 'Phone:' label is an address line (e.g. '12th cross', 'Near Temple', 'MG Road'), DO NOT extract it as phone number. Set phone to null, and keep that text inside the address field!
+3. POSTAGE LINES: Lines like "Mailed from ZIP ...", "CommercialBasePrice ...", "5oz First-Class Pkg Svc" are postage rate/service metadata. Put weight in "package.weight" and service description in "order.remarks". Do NOT put them as the sender name!
+4. Return strictly valid JSON adhering to the schema.
 """
 
 
@@ -446,11 +504,9 @@ def extract_shipping_info_llm(
     The LLM understands the label and separates the data into FROM, TO, Order, Package, Items, etc.
     Falls back to spatial heuristic extraction if LLM is unavailable, offline, or fails.
     """
-    import json
-    import os
     from llm_extractor import get_groq_client
 
-    # 1. First run the baseline heuristic extraction
+    # 1. First run the enhanced baseline heuristic extraction
     heuristic_res = extract_shipping_label_data(
         ocr_raw_text=ocr_raw_text,
         ocr_layout_text=ocr_layout_text,
@@ -538,7 +594,7 @@ Return only valid JSON adhering strictly to the schema."""
                 city=to_data.get("city") or heuristic_res.ship_to.city,
                 state=to_data.get("state") or heuristic_res.ship_to.state,
                 postal_code=str(to_data.get("postal_code")) if to_data.get("postal_code") is not None else heuristic_res.ship_to.postal_code,
-                country=to_data.get("country") or heuristic_res.ship_to.country or "India"
+                country=to_data.get("country") or heuristic_res.ship_to.country
             )
         else:
             result.ship_to = heuristic_res.ship_to
@@ -565,7 +621,7 @@ Return only valid JSON adhering strictly to the schema."""
                 city=from_data.get("city") or heuristic_res.ship_from.city,
                 state=from_data.get("state") or heuristic_res.ship_from.state,
                 postal_code=str(from_data.get("postal_code")) if from_data.get("postal_code") is not None else heuristic_res.ship_from.postal_code,
-                country=from_data.get("country") or heuristic_res.ship_from.country or "India"
+                country=from_data.get("country") or heuristic_res.ship_from.country
             )
         else:
             result.ship_from = heuristic_res.ship_from
@@ -605,7 +661,7 @@ Return only valid JSON adhering strictly to the schema."""
                         if it.get("quantity") is not None:
                             q_clean = re.sub(r"[^\d]", "", str(it["quantity"]))
                             q_val = int(q_clean) if q_clean else None
-                        
+
                         p_val = None
                         if it.get("price") is not None:
                             p_clean = re.sub(r"[^\d\.]", "", str(it["price"]))
@@ -632,4 +688,3 @@ Return only valid JSON adhering strictly to the schema."""
         return result
     except Exception:
         return heuristic_res
-

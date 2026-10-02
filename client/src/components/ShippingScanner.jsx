@@ -12,7 +12,10 @@ import {
   Sparkles,
   Sliders,
   FileCheck,
-  Cpu
+  Cpu,
+  Key,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { extractShippingApi } from '../services/api';
 import ShippingResultsView from './ShippingResultsView';
@@ -25,6 +28,8 @@ export default function ShippingScanner({ settings = {} }) {
   const [errorMessage, setErrorMessage] = useState(null);
   
   // OCR, LLM & enhancement options
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('groq_api_key') || settings.groq_api_key || '');
+  const [showApiKey, setShowApiKey] = useState(false);
   const [minConfidence, setMinConfidence] = useState(20);
   const [enableClahe, setEnableClahe] = useState(true);
   const [enableDenoise, setEnableDenoise] = useState(true);
@@ -135,7 +140,7 @@ export default function ShippingScanner({ settings = {} }) {
         enable_clahe: enableClahe,
         enable_denoise: enableDenoise,
         model_name: selectedModel,
-        groq_api_key: settings.groq_api_key,
+        groq_api_key: apiKey.trim() || settings.groq_api_key,
       });
       setResults(data);
     } catch (err) {
@@ -160,9 +165,17 @@ export default function ShippingScanner({ settings = {} }) {
             <h2 className="text-xl font-bold text-slate-900 tracking-tight">
               Shipping Label Scanner
             </h2>
-            <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              RapidOCR → LLM AI
-            </span>
+            {apiKey.trim() ? (
+              <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Groq LLM Active</span>
+              </span>
+            ) : (
+              <span className="text-[11px] font-bold uppercase px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center space-x-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                <span>Heuristic Mode Active</span>
+              </span>
+            )}
           </div>
           <p className="text-xs text-slate-500 max-w-2xl">
             Upload 1, 2, or up to 3 shipping label images. RapidOCR reads the label text, which is sent to the LLM to understand and separate into FROM, TO, Order, Package, and Item lines alongside multi-pass Barcode & QR code scanning.
@@ -191,10 +204,52 @@ export default function ShippingScanner({ settings = {} }) {
       {/* Advanced Scan Settings (Collapsible) */}
       {showOptions && (
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in">
-          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-            Scanner, LLM & Preprocessing Options
-          </h4>
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+              Scanner, LLM & Preprocessing Options
+            </h4>
+            <span className="text-[11px] text-slate-500">
+              {apiKey.trim() ? "🟢 Cloud LLM Mode Connected" : "⚡ Offline Local Engine Active"}
+            </span>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            {/* Groq API Key */}
+            <div className="space-y-1 md:col-span-2">
+              <div className="flex justify-between items-center">
+                <label className="text-slate-700 font-medium flex items-center space-x-1.5">
+                  <Key className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Groq API Key:</span>
+                </label>
+                {apiKey.trim() ? (
+                  <span className="text-[10px] font-semibold text-emerald-600">✓ Connected</span>
+                ) : (
+                  <span className="text-[10px] text-slate-400">Optional (for LLM reasoning)</span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={(e) => {
+                    const val = e.target.value.trim();
+                    setApiKey(val);
+                    localStorage.setItem('groq_api_key', val);
+                  }}
+                  placeholder="gsk_..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-2.5 pr-8 py-1.5 text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title={showApiKey ? "Hide key" : "Show key"}
+                >
+                  {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+
             {/* AI Model selection */}
             <div className="space-y-1">
               <label className="text-slate-700 font-medium flex items-center space-x-1.5">
@@ -230,7 +285,8 @@ export default function ShippingScanner({ settings = {} }) {
               />
             </div>
 
-            <div className="flex items-center space-x-2 pt-4">
+            {/* Preprocessing Toggles */}
+            <div className="flex items-center space-x-2 pt-2">
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -242,7 +298,7 @@ export default function ShippingScanner({ settings = {} }) {
               </label>
             </div>
 
-            <div className="flex items-center space-x-2 pt-4">
+            <div className="flex items-center space-x-2 pt-2">
               <label className="flex items-center space-x-2 cursor-pointer">
                 <input
                   type="checkbox"

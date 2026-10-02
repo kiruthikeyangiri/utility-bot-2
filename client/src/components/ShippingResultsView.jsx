@@ -221,7 +221,7 @@ function SingleLabelCard({ label, index }) {
                     </div>
                     <div>
                       <span className="text-slate-500 block">Country</span>
-                      <span className="font-semibold text-slate-700">{shipTo.country || 'India'}</span>
+                      <span className="font-semibold text-slate-700">{shipTo.country || '—'}</span>
                     </div>
                   </div>
                 </div>
@@ -287,7 +287,7 @@ function SingleLabelCard({ label, index }) {
                     </div>
                     <div>
                       <span className="text-slate-500 block">Country</span>
-                      <span className="font-semibold text-slate-700">{shipFrom.country || 'India'}</span>
+                      <span className="font-semibold text-slate-700">{shipFrom.country || '—'}</span>
                     </div>
                   </div>
                 </div>
