@@ -2,25 +2,13 @@ import React, { useState } from 'react';
 import { 
   FileText, 
   MapPin, 
-  User, 
-  Phone, 
-  Mail, 
   Building, 
-  Truck, 
-  Package, 
-  ShoppingBag, 
-  Calendar, 
-  CreditCard, 
-  Hash, 
   Barcode, 
   Code, 
   AlertTriangle,
   Copy,
   Check,
-  CheckCircle2,
-  DollarSign,
-  Scale,
-  Maximize2
+  CheckCircle2
 } from 'lucide-react';
 import CodeResults from './CodeResults';
 import JsonViewer from './JsonViewer';
@@ -295,160 +283,6 @@ function SingleLabelCard({ label, index }) {
 
             </div>
 
-            {/* 2. ORDER & PACKAGE INFORMATION */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              
-              {/* ORDER DETAILS */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center space-x-2 pb-2 border-b border-slate-100 text-slate-800">
-                  <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700">
-                    <Truck className="w-4 h-4" />
-                  </div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider">ORDER DETAILS</h4>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">AWB Number</span>
-                    <span className="font-mono font-bold text-slate-900 select-all">
-                      {order.awb_number || <span className="text-slate-400 font-normal italic">—</span>}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">Tracking Number</span>
-                    <span className="font-mono font-bold text-slate-900 select-all">
-                      {order.tracking_number || <span className="text-slate-400 font-normal italic">—</span>}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">Order ID</span>
-                    <span className="font-mono font-semibold text-slate-800 select-all">
-                      {order.order_id || <span className="text-slate-400 font-normal italic">—</span>}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">Payment Type</span>
-                    {order.payment_type ? (
-                      <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-bold border ${
-                        order.payment_type.includes('COD') 
-                          ? 'bg-amber-50 text-amber-800 border-amber-200' 
-                          : 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                      }`}>
-                        {order.payment_type}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400 italic">—</span>
-                    )}
-                  </div>
-
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">Shipping Date</span>
-                    <span className="font-medium text-slate-700">
-                      {order.shipping_date || <span className="text-slate-400 italic">—</span>}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">Remarks</span>
-                    <span className="font-medium text-slate-700 truncate block">
-                      {order.remarks || <span className="text-slate-400 italic">—</span>}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* PACKAGE INFORMATION */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center space-x-2 pb-2 border-b border-slate-100 text-slate-800">
-                  <div className="p-1.5 rounded-lg bg-teal-50 text-teal-700">
-                    <Package className="w-4 h-4" />
-                  </div>
-                  <h4 className="text-xs font-bold uppercase tracking-wider">PACKAGE INFORMATION</h4>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs">
-                  <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100">
-                    <div className="flex items-center space-x-1.5 text-slate-500 text-[11px] mb-1">
-                      <Scale className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Weight</span>
-                    </div>
-                    <span className="text-sm font-bold text-slate-900">
-                      {pkg.weight || <span className="text-slate-400 font-normal italic">Not specified</span>}
-                    </span>
-                  </div>
-
-                  <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-100">
-                    <div className="flex items-center space-x-1.5 text-slate-500 text-[11px] mb-1">
-                      <Maximize2 className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Dimensions</span>
-                    </div>
-                    <span className="text-sm font-bold text-slate-900">
-                      {pkg.dimensions || <span className="text-slate-400 font-normal italic">Not specified</span>}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            {/* 3. PRODUCT / ITEM TABLE */}
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center space-x-2 pb-2 border-b border-slate-100 text-slate-800">
-                <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700">
-                  <ShoppingBag className="w-4 h-4" />
-                </div>
-                <h4 className="text-xs font-bold uppercase tracking-wider">
-                  ITEMS / PRODUCT MANIFEST ({items.length})
-                </h4>
-              </div>
-
-              {items.length === 0 ? (
-                <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-500">
-                  No line items or SKU table detected on this label.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50/70 text-slate-600">
-                        <th className="py-2.5 px-3 font-semibold rounded-l-lg">#</th>
-                        <th className="py-2.5 px-3 font-semibold">Product Description</th>
-                        <th className="py-2.5 px-3 font-semibold text-center">Qty</th>
-                        <th className="py-2.5 px-3 font-semibold text-right">Price</th>
-                        <th className="py-2.5 px-3 font-semibold text-center">Curr</th>
-                        <th className="py-2.5 px-3 font-semibold text-right rounded-r-lg">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {items.map((it, itIdx) => (
-                        <tr key={itIdx} className="hover:bg-slate-50/60 transition">
-                          <td className="py-2.5 px-3 text-slate-400 font-mono">{itIdx + 1}</td>
-                          <td className="py-2.5 px-3 font-semibold text-slate-900">
-                            {it.product || 'Item'}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-mono text-slate-700">
-                            {it.quantity != null ? it.quantity : '—'}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                            {it.price != null ? it.price.toLocaleString() : '—'}
-                          </td>
-                          <td className="py-2.5 px-3 text-center text-slate-500 font-mono text-[11px]">
-                            {it.currency || 'INR'}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
-                            {it.total != null ? it.total.toLocaleString() : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
           </div>
         )}
 
@@ -511,38 +345,12 @@ function SingleLabelCard({ label, index }) {
   );
 }
 
-export default function ShippingResultsView({ results = [], onScanMore }) {
+export default function ShippingResultsView({ results = [] }) {
   if (!results || results.length === 0) return null;
 
   return (
     <div className="space-y-6 animate-in fade-in-50 duration-300">
       
-      {/* Top Results Overview Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-sky-50/50 border border-sky-100 rounded-2xl">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-xl bg-sky-600 text-white shadow-sm">
-            <Package className="w-5 h-5" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">
-              Extraction Completed ({results.length} Label{results.length > 1 ? 's' : ''})
-            </h3>
-            <p className="text-xs text-slate-600">
-              Every shipping label was analyzed independently with zero cross-contamination.
-            </p>
-          </div>
-        </div>
-
-        {onScanMore && (
-          <button
-            onClick={onScanMore}
-            className="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs border border-slate-200 hover:border-slate-300 transition shadow-sm"
-          >
-            Scan More Labels
-          </button>
-        )}
-      </div>
-
       {/* Separate Result Card for each uploaded image */}
       <div className="space-y-6">
         {results.map((item, idx) => (
