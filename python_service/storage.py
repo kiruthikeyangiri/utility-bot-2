@@ -22,11 +22,12 @@ os.makedirs(DATA_DIR, exist_ok=True)
 for file_path in [HISTORY_FILE, FAILED_HISTORY_FILE]:
     if not os.path.exists(file_path):
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump([], f)
+            f.write("[]\n")
 
 if not os.path.exists(COUNTERS_FILE):
     with open(COUNTERS_FILE, "w", encoding="utf-8") as f:
-        json.dump({"IMG": 0, "FAIL": 0}, f)
+        json.dump({"IMG": 0, "FAIL": 0}, f, indent=2)
+        f.write("\n")
 
 # ---------------------------------------------------------------------------
 # MongoDB Atlas Data API (HTTPS REST) — Bypasses Python 3.14 TLS issues
@@ -236,7 +237,11 @@ def read_failed_history(auto_purge: bool = True) -> List[Dict[str, Any]]:
 def write_file_records(file_path: str, data: List[Dict[str, Any]]) -> None:
     try:
         with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+            if not data:
+                f.write("[]\n")
+            else:
+                json.dump(data, f, indent=2)
+                f.write("\n")
     except Exception as e:
         print(f"[Utility Bot Storage] Error writing {file_path}: {e}")
 

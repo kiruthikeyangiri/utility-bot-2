@@ -19,7 +19,7 @@ REFERENCES_FILE = os.path.join(DATA_DIR, "references.json")
 os.makedirs(DATA_DIR, exist_ok=True)
 if not os.path.exists(REFERENCES_FILE):
     with open(REFERENCES_FILE, "w", encoding="utf-8") as f:
-        json.dump([], f)
+        f.write("[]\n")
 
 
 def mask_aadhaar(number: Optional[str]) -> str:
@@ -137,7 +137,11 @@ def write_reference_records(records: List[Dict[str, Any]]) -> None:
     """Saves reference cards to local storage."""
     try:
         with open(REFERENCES_FILE, "w", encoding="utf-8") as f:
-            json.dump(records, f, indent=2)
+            if not records:
+                f.write("[]\n")
+            else:
+                json.dump(records, f, indent=2)
+                f.write("\n")
     except Exception as e:
         print(f"[ReferenceService] Error writing references: {e}")
 
