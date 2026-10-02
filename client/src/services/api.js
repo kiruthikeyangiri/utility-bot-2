@@ -247,4 +247,37 @@ export const verifySecondIdApi = async (payload) => {
   return response.data;
 };
 
+/**
+ * Uploads 1 to 3 shipping label images for parallel separate processing.
+ */
+export const extractShippingApi = async (files, options = {}) => {
+  const formData = new FormData();
+  if (Array.isArray(files)) {
+    files.forEach((file) => {
+      formData.append('files', file);
+    });
+  } else if (files) {
+    formData.append('files', files);
+  }
+
+  if (options.min_confidence !== undefined) {
+    formData.append('min_confidence', options.min_confidence);
+  }
+  if (options.enable_clahe !== undefined) {
+    formData.append('enable_clahe', options.enable_clahe);
+  }
+  if (options.enable_denoise !== undefined) {
+    formData.append('enable_denoise', options.enable_denoise);
+  }
+
+  const response = await api.post('/extract-shipping', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+
+  return response.data;
+};
+
+
 

@@ -208,6 +208,44 @@ def test_crosscheck_service():
     print("  [PASS] Multi-Document Cross-Verification tests passed.")
 
 
+from shipping_extractor import extract_shipping_label_data
+
+
+
+def test_shipping_label_extraction():
+    print("Testing Shipping Label Heuristic Extraction & Phone Validation...")
+    ocr_raw = """
+    SHIP TO:
+    AHAMMED
+    Phone:
+    12th cross
+    KA
+    PIN: 560043
+
+    SHIP FROM:
+    FLIPKART LOGISTICS
+    Bangalore
+    560100
+
+    ORDER ID: ORD-9928172
+    AWB: 1122334455
+    WEIGHT: 1.5 KG
+    DIMENSIONS: 10x10x5 cm
+    COD: Rs. 499
+
+    T-Shirt Qty 1 Price 499 Total 499
+    """
+    res = extract_shipping_label_data(ocr_raw, ocr_raw)
+    assert res.ship_to.phone is None, f"Expected phone to be None, got: {res.ship_to.phone}"
+    assert "12th cross" in (res.ship_to.address or ""), f"Expected '12th cross' in address, got: {res.ship_to.address}"
+    assert res.ship_to.postal_code == "560043"
+    assert res.order.order_id == "ORD-9928172"
+    assert res.order.awb_number == "1122334455"
+    assert res.order.payment_type == "COD"
+    assert "1.5" in (res.package.weight or "")
+    print("  [PASS] Shipping Label Extraction & Phone Validation tests passed.")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("RUNNING UTILITY BOT ENTERPRISE TEST SUITE")
@@ -222,6 +260,8 @@ if __name__ == "__main__":
     test_reference_card_service()
     test_liveness_and_spoof_detection()
     test_crosscheck_service()
+    test_shipping_label_extraction()
     print("=" * 60)
-    print("ALL 10 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
+    print("ALL 11 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
     print("=" * 60)
+

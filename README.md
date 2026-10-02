@@ -2,6 +2,7 @@
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI_Enterprise_v3.1-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/Frontend-React_18_Vite-61DAFB.svg?style=flat&logo=react)](https://react.dev)
+[![ZXing-CPP](https://img.shields.io/badge/Barcode_%26_QR-ZXing--CPP_v2.2-blue.svg?style=flat)](https://github.com/zxing-cpp/zxing-cpp)
 [![YOLOv8](https://img.shields.io/badge/AI_Vision-YOLOv8_Face_Detection-00FFFF.svg?style=flat)](https://github.com/ultralytics/ultralytics)
 [![RapidOCR](https://img.shields.io/badge/OCR_Engine-RapidOCR_(ONNX_Runtime)-007ACC.svg?style=flat)](https://github.com/RapidAI/RapidOCR)
 [![Deep SFace](https://img.shields.io/badge/Biometrics-Deep_SFace_128D_(ONNX)-8A2BE2.svg?style=flat)](https://docs.opencv.org/)
@@ -9,9 +10,10 @@
 [![MongoDB Atlas](https://img.shields.io/badge/Database-MongoDB_Atlas_Cloud-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com)
 [![Compliance](https://img.shields.io/badge/Privacy-DPDP_%26_UIDAI_Compliant-success.svg)](#-data-privacy--enterprise-security)
 
-**Utility Bot** is a high-throughput, bank-grade identity verification and KYC compliance engine built for instant processing of Indian government identity documents (**Aadhaar Card**, **PAN Card**, and **Driving Licence**). 
+**Utility Bot** is a high-throughput, bank-grade identity verification, logistics intelligence, and compliance engine. It supports instant verification of Indian government identity documents (**Aadhaar Card**, **PAN Card**, and **Driving Licence**) as well as multi-image **Shipping Label Scanning** for courier & logistics parcels.
 
-The platform integrates **RapidOCR ONNX**, **YOLOv8 Face Detection**, **Deep SFace 128-D Biometric Face Recognition**, **Anti-Spoofing Liveness Detection**, **Multi-Document Cross-Verification**, and **Privacy-Safe Identity Reference Cards** to deliver sub-second verifications, zero false image crops, and full compliance with DPDP & UIDAI regulations.
+The platform integrates **RapidOCR ONNX**, **ZXing-CPP Barcode & 2D Matrix Engine**, **YOLOv8 Face Detection**, **Deep SFace 128-D Biometric Face Recognition**, **Anti-Spoofing Liveness Detection**, **Multi-Document Cross-Verification**, and **Privacy-Safe Identity Reference Cards** to deliver sub-second extractions, zero false image crops, and full compliance with DPDP & UIDAI regulations.
+
 
 ---
 
@@ -139,7 +141,29 @@ flowchart TD
 - **Station Device ID Isolation:** Scopes verification records per workstation via `X-Device-Id` headers.
 - **30-Day Statutory Auto-Purge:** Automatic background cleaner removes stale PII records in compliance with DPDP data minimization rules.
 
+### 7. 📦 Shipping Label Scanner & Multi-Pass Barcode / QR Engine (`NEW`)
+- **Multi-Image Processing:** Allows simultaneous upload of **1, 2, or 3 shipping label images** (JPG, JPEG, PNG). Each image is processed strictly independently without merging.
+- **Layout-Free Spatial Extraction:** Employs RapidOCR bounding box coordinates, relative positioning, and keyword heuristics (Delhivery, Blue Dart, Ekart, DTDC, Amazon Logistics, FedEx, DHL, etc.).
+  - **SHIP TO (Receiver):** Name, Phone, Email, Address, City, State, Postal Code, Country.
+  - **SHIP FROM (Sender):** Name, Company, Phone, Email, Address, City, State, Postal Code, Country.
+  - **ORDER INFORMATION:** Order ID, Tracking Number, AWB Number, Shipping Date, Payment Type (COD / Prepaid), Remarks.
+  - **PACKAGE INFORMATION:** Weight (e.g., `2.5 KG`), Dimensions (e.g., `12cm x 12cm x 12cm`).
+  - **ITEMS / PRODUCT TABLE:** Extracts SKU line items (Product description, Quantity, Price, Currency, Total).
+- **Multi-Pass Barcode & QR Code Reader:**
+  - **Primary Engine:** `zxing-cpp` native decoding.
+  - **Fallback Pass 2:** Grayscale + Upscale + CLAHE contrast equalization + Sharpening kernel.
+  - **Fallback Pass 3:** Otsu / Adaptive Thresholding + 90°/180°/270° multi-angle image rotations.
+  - **Fallback Pass 4:** OpenCV `QRCodeDetector` matrix fallback.
+  - **Deduplication:** Automatic deduplication by `(format, value)`.
+- **Strict Contact Number Validation:** Validates genuine 10-12 digit mobile phone numbers. Incomplete numbers (e.g. street lines under a Phone label like `"12th cross"`) are cleanly preserved inside the address block while setting `phone = null`.
+
+### 8. ☰ Hamburger Drawer Menu & Multi-Page Navigation (`NEW`)
+- Quick access sidebar triggered by `☰` hamburger button.
+- Clean slide-out navigation between **Home**, **ID Verification**, **Shipping Label Scanner**, **History**, **Settings**, and **About**.
+- Separate result card per shipping label with tabs for **Details**, **OCR Text**, **Barcode / QR**, and **JSON Payload**.
+
 ---
+
 
 ## 💼 Performance Benchmarks (KPIs)
 
@@ -277,16 +301,21 @@ docker run -p 8000:8000 utility-bot
 
 ### 🧪 Running Automated Tests
 
-Run the full 10-module test suite to verify OCR, validation rules, biometrics, and cross-checks:
+Run the full 11-module test suite to verify OCR, validation rules, biometrics, cross-checks, and shipping label heuristics:
 
 ```powershell
 python python_service/test_pipeline.py
 ```
-*Expected Output: `ALL 10 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]`*
+*Expected Output: `ALL 11 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]`*
 
 ---
 
 ## 📡 REST API Reference
+
+### **Shipping Label & Logistics Extraction**
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/extract-shipping` | Upload 1 to 3 shipping label images (JPG/PNG). Executes parallel multi-pass Barcode & QR scanning (`zxing-cpp` + OpenCV), RapidOCR, and courier/address extraction. |
 
 ### **Document Extraction & Confirmation**
 | Method | Endpoint | Description |
@@ -294,6 +323,7 @@ python python_service/test_pipeline.py
 | `POST` | `/extract` | Upload identity image; executes Pre-LLM Gate, YOLO portrait crop, RapidOCR, and Pydantic normalization. |
 | `POST` | `/confirm` | Confirms extracted details, creates Privacy Reference Card, and records `IMG...` / `FAIL...` sequential ID. |
 | `GET` | `/models` | Returns available LLM models for extraction. |
+
 
 ### **Biometric Face & Liveness Verification**
 | Method | Endpoint | Description |

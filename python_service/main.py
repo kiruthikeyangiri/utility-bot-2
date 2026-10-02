@@ -18,7 +18,7 @@ try:
 except Exception:
     pass
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -27,6 +27,10 @@ from PIL import Image
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from shipping_schemas import ShippingLabelResult, CodeItem
+from shipping_extractor import extract_shipping_label_data
+from code_reader import extract_codes
 
 from schemas import (
     FinalExtractionResult, 
@@ -556,6 +560,109 @@ async def extract_document(
             images={"original": "", "preprocessed": "", "annotated": ""},
             portrait_photo=None
         )
+
+
+@app.post("/extract-shipping", response_model=List[ShippingLabelResult])
+async def extract_shipping_labels(
+    files: List[UploadFile] = File(...),
+    min_confidence: float = Form(20.0),
+    enable_clahe: bool = Form(True),
+    enable_denoise: bool = Form(True)
+):
+    """
+    Multi-Image Shipping Label Extraction Endpoint.
+    Accepts 1 to 3 images (JPG, JPEG, PNG).
+    Processes every image separately without merging.
+    Runs RapidOCR, Barcode & QR scanning (ZXing-CPP + OpenCV),
+    and heuristic shipping field extraction.
+    """
+    if not files or len(files) == 0:
+        raise HTTPException(status_code=400, detail="At least 1 shipping label image is required.")
+    if len(files) > 3:
+        raise HTTPException(status_code=400, detail="Maximum 3 shipping label images allowed per request.")
+
+    results: List[ShippingLabelResult] = []
+
+    for idx, file in enumerate(files, start=1):
+        filename = file.filename or f"shipping_label_{idx}.jpg"
+
+        # 1. Format check
+        if not file.content_type or not file.content_type.startswith("image/"):
+            res = ShippingLabelResult(
+                image_name=filename,
+                image_index=idx,
+                warnings=[f"File '{filename}' must be a valid image (JPG, JPEG, PNG)."]
+            )
+            results.append(res)
+            continue
+
+        try:
+            contents = await file.read()
+            pil_image = Image.open(io.BytesIO(contents))
+            if pil_image.mode not in ("RGB", "L"):
+                pil_image = pil_image.convert("RGB")
+            cv2_orig = pil_to_cv2(pil_image)
+        except Exception as e:
+            res = ShippingLabelResult(
+                image_name=filename,
+                image_index=idx,
+                warnings=[f"Failed to decode image '{filename}': {str(e)}"]
+            )
+            results.append(res)
+            continue
+
+        # 2. Memory-safe dimension normalization (Max dim 1800px)
+        h, w = cv2_orig.shape[:2]
+        max_dim = 1800
+        if max(h, w) > max_dim:
+            scale = max_dim / float(max(h, w))
+            cv2_orig = cv2.resize(cv2_orig, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
+        # 3. Barcode & QR Code detection
+        codes_dict = extract_codes(cv2_orig)
+
+        # 4. OpenCV Preprocessing for OCR
+        try:
+            cv2_preprocessed = preprocess_id_card(
+                cv2_orig,
+                enable_resize=False,
+                enable_clahe=enable_clahe,
+                enable_denoise=enable_denoise,
+                enable_glare_reduction=True
+            )
+        except Exception:
+            cv2_preprocessed = cv2_orig
+
+        # 5. RapidOCR Text Extraction
+        try:
+            ocr_res = extract_ocr_data(cv2_preprocessed, min_confidence=min_confidence)
+            ocr_raw_text = ocr_res.raw_text
+            ocr_layout_text = ocr_res.layout_text
+            ocr_conf = ocr_res.average_confidence
+            ocr_words = [w.dict() if hasattr(w, "dict") else w.model_dump() for w in ocr_res.words]
+        except Exception as ocr_err:
+            logger.error(f"OCR error on {filename}: {ocr_err}")
+            ocr_raw_text = ""
+            ocr_layout_text = ""
+            ocr_conf = 0.0
+            ocr_words = []
+
+        # 6. Extract Shipping Fields
+        label_res = extract_shipping_label_data(
+            ocr_raw_text=ocr_raw_text,
+            ocr_layout_text=ocr_layout_text,
+            ocr_words=ocr_words
+        )
+
+        label_res.image_name = filename
+        label_res.image_index = idx
+        label_res.ocr_confidence = ocr_conf
+        label_res.barcodes = [CodeItem(**c) for c in codes_dict.get("barcodes", [])]
+        label_res.qr_codes = [CodeItem(**c) for c in codes_dict.get("qr_codes", [])]
+
+        results.append(label_res)
+
+    return results
 
 
 # -----------------------------------------------------------------------------
