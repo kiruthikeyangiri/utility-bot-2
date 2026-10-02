@@ -10,11 +10,7 @@ import {
   CheckCircle2, 
   ArrowRight,
   Sliders,
-  FileCheck,
-  Cpu,
-  Key,
-  Eye,
-  EyeOff
+  FileCheck
 } from 'lucide-react';
 import { extractShippingApi } from '../services/api';
 import ShippingResultsView from './ShippingResultsView';
@@ -26,13 +22,10 @@ export default function ShippingScanner({ settings = {} }) {
   const [results, setResults] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   
-  // OCR, LLM & enhancement options
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('groq_api_key') || settings.groq_api_key || '');
-  const [showApiKey, setShowApiKey] = useState(false);
+  // OCR & enhancement options
   const [minConfidence, setMinConfidence] = useState(20);
   const [enableClahe, setEnableClahe] = useState(true);
   const [enableDenoise, setEnableDenoise] = useState(true);
-  const [selectedModel, setSelectedModel] = useState(settings.model_name || 'llama-3.3-70b-versatile');
   const [showOptions, setShowOptions] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -138,8 +131,8 @@ export default function ShippingScanner({ settings = {} }) {
         min_confidence: minConfidence,
         enable_clahe: enableClahe,
         enable_denoise: enableDenoise,
-        model_name: selectedModel,
-        groq_api_key: apiKey.trim() || settings.groq_api_key,
+        model_name: settings.model_name || 'llama-3.3-70b-versatile',
+        groq_api_key: settings.groq_api_key || localStorage.getItem('groq_api_key') || '',
       });
       setResults(data);
     } catch (err) {
@@ -166,7 +159,7 @@ export default function ShippingScanner({ settings = {} }) {
             </h2>
           </div>
           <p className="text-xs text-slate-500 max-w-2xl">
-            Upload 1, 2, or up to 3 shipping label images. RapidOCR reads the label text, which is sent to the LLM to understand and separate into FROM, TO, Order, Package, and Item lines alongside multi-pass Barcode & QR code scanning.
+            Upload 1, 2, or up to 3 shipping label images. Extracts sender, receiver, order, package details, items, barcodes, and QR codes.
           </p>
         </div>
 
@@ -192,67 +185,11 @@ export default function ShippingScanner({ settings = {} }) {
       {/* Advanced Scan Settings (Collapsible) */}
       {showOptions && (
         <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm space-y-4 animate-in fade-in">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-              Scanner, LLM & Preprocessing Options
-            </h4>
-          </div>
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+            Scanner & Preprocessing Options
+          </h4>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-            {/* Groq API Key */}
-            <div className="space-y-1 md:col-span-2">
-              <div className="flex justify-between items-center">
-                <label className="text-slate-700 font-medium flex items-center space-x-1.5">
-                  <Key className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Groq API Key:</span>
-                </label>
-                {apiKey.trim() ? (
-                  <span className="text-[10px] font-semibold text-emerald-600">✓ Connected</span>
-                ) : (
-                  <span className="text-[10px] text-slate-400">Optional (for LLM reasoning)</span>
-                )}
-              </div>
-              <div className="relative">
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={(e) => {
-                    const val = e.target.value.trim();
-                    setApiKey(val);
-                    localStorage.setItem('groq_api_key', val);
-                  }}
-                  placeholder="gsk_..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-2.5 pr-8 py-1.5 text-xs font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                  title={showApiKey ? "Hide key" : "Show key"}
-                >
-                  {showApiKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-
-            {/* AI Model selection */}
-            <div className="space-y-1">
-              <label className="text-slate-700 font-medium flex items-center space-x-1.5">
-                <Cpu className="w-3.5 h-3.5 text-sky-600" />
-                <span>Extraction LLM Model:</span>
-              </label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500 transition"
-              >
-                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Recommended)</option>
-                <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
-                <option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b</option>
-                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
-              </select>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             {/* Min OCR Confidence */}
             <div className="space-y-1">
               <div className="flex justify-between font-medium text-slate-700">
@@ -428,7 +365,7 @@ export default function ShippingScanner({ settings = {} }) {
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
                   <span>
-                    Scanning {selectedFiles.length} Label{selectedFiles.length > 1 ? 's' : ''} (RapidOCR → LLM Data Separation → Barcode & QR Engine)...
+                    Scanning {selectedFiles.length} Shipping Label{selectedFiles.length > 1 ? 's' : ''}...
                   </span>
                 </>
               ) : (
