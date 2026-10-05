@@ -512,14 +512,16 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
                 contact["company"] = candidate_name
             address_parts = address_parts[1:]
 
-    # Resolve State and Country from Postal Code if missing
-    if contact["postal_code"] and (not contact["state"] or not contact["country"]):
+    # Resolve State, City and Country from Postal Code if missing
+    if contact["postal_code"] and (not contact["state"] or not contact["country"] or not contact["city"]):
         p_res = resolve_state_from_postal(contact["postal_code"], contact.get("country"))
         if p_res:
             if not contact["state"]:
                 contact["state"] = p_res["state_name"]
             if not contact["country"]:
                 contact["country"] = p_res["country_name"]
+            if not contact["city"] and p_res.get("city_name"):
+                contact["city"] = p_res["city_name"]
 
     # Extract City from address tokens if missing
     if not contact["city"] and address_parts:

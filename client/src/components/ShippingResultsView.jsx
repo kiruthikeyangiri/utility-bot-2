@@ -19,7 +19,7 @@ import {
   Tag,
   QrCode
 } from 'lucide-react';
-import CodeResults from './CodeResults';
+import CodeResults, { lookupCodeInfo } from './CodeResults';
 import JsonViewer from './JsonViewer';
 
 function SingleLabelCard({ label, index }) {
@@ -371,6 +371,89 @@ function SingleLabelCard({ label, index }) {
                 <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-200/70">
                   <span className="text-[11px] text-slate-500 font-medium block">Remarks / Notes</span>
                   <span className="text-slate-700">{order.remarks}</span>
+                </div>
+              )}
+
+              {/* Detected Barcodes & QR Symbologies on Details View */}
+              {(barcodes.length > 0 || qrCodes.length > 0) && (
+                <div className="pt-3 border-t border-slate-100 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 flex items-center space-x-1.5">
+                      <Barcode className="w-3.5 h-3.5 text-sky-600" />
+                      <span>Detected Optical Codes ({barcodes.length + qrCodes.length})</span>
+                    </span>
+                    <button
+                      onClick={() => setActiveTab('codes')}
+                      className="text-[11px] text-sky-600 hover:text-sky-700 font-semibold transition hover:underline"
+                    >
+                      View Full Details & Guide &rarr;
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    {barcodes.map((b, bIdx) => {
+                      const bInfo = lookupCodeInfo(b.format);
+                      return (
+                        <div key={`b-det-${bIdx}`} className="bg-sky-50/50 border border-sky-100 rounded-xl p-3 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-[10px] font-bold uppercase">
+                                {b.format || 'Barcode'}
+                              </span>
+                              {bInfo && (
+                                <span className="text-[10px] font-medium text-slate-600 truncate max-w-[140px]">
+                                  {bInfo.fullForm}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400">Barcode #{bIdx + 1}</span>
+                          </div>
+                          <div className="font-mono font-bold text-slate-900 text-xs break-all select-all pt-0.5">
+                            {b.value}
+                          </div>
+                          {bInfo && (
+                            <p className="text-[10px] text-slate-500 leading-tight">
+                              <strong className="text-slate-700 font-medium">Used for:</strong> {bInfo.useFor}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {qrCodes.map((q, qIdx) => {
+                      const qInfo = lookupCodeInfo(q.format);
+                      return (
+                        <div key={`q-det-${qIdx}`} className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-bold uppercase">
+                                {q.format || 'QRCode'}
+                              </span>
+                              {q.content_type && (
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
+                                  {q.content_type}
+                                </span>
+                              )}
+                              {qInfo && (
+                                <span className="text-[10px] font-medium text-slate-600 truncate max-w-[120px]">
+                                  {qInfo.fullForm}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-400">QR #{qIdx + 1}</span>
+                          </div>
+                          <div className="font-mono font-medium text-slate-800 text-xs break-all select-all pt-0.5">
+                            {q.value}
+                          </div>
+                          {qInfo && (
+                            <p className="text-[10px] text-slate-500 leading-tight">
+                              <strong className="text-slate-700 font-medium">Used for:</strong> {qInfo.useFor}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

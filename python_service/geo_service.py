@@ -213,7 +213,7 @@ def resolve_state(
 
 
 def resolve_state_from_postal(postal_code: str, country_hint: Optional[str] = None) -> Optional[Dict[str, str]]:
-    """Infers state and country from 5-digit US ZIP code or 6-digit Indian PIN code."""
+    """Infers state, city (for major metros), and country from 5-digit US ZIP code or 6-digit Indian PIN code."""
     if not postal_code:
         return None
     p_clean = re.sub(r"[^\d]", "", str(postal_code).strip())
@@ -236,13 +236,51 @@ def resolve_state_from_postal(postal_code: str, country_hint: Optional[str] = No
             (90000, 96199, "CA"), (96700, 96899, "HI"), (97000, 97999, "OR"), (98000, 99499, "WA"),
             (99500, 99999, "AK")
         ]
+        city_cand = None
+        if 10001 <= zip_int <= 10292:
+            city_cand = "New York"
+        elif 90001 <= zip_int <= 90089:
+            city_cand = "Los Angeles"
+        elif 60601 <= zip_int <= 60661:
+            city_cand = "Chicago"
+        elif 77001 <= zip_int <= 77099:
+            city_cand = "Houston"
+
         for z_min, z_max, st_code in zip_state_map:
             if z_min <= zip_int <= z_max:
-                return resolve_state(st_code, "US")
+                res = resolve_state(st_code, "US")
+                if res:
+                    res_copy = dict(res)
+                    if city_cand:
+                        res_copy["city_name"] = city_cand
+                    return res_copy
 
     # 2. Indian 6-Digit PIN Code Range Mapping
     if len(p_clean) == 6 and (not country_hint or "IN" in country_hint.upper() or "INDIA" in country_hint.upper()):
         pin_prefix = int(p_clean[:2])
+        pin_prefix3 = int(p_clean[:3])
+        city_cand = None
+        if pin_prefix3 in [560]:
+            city_cand = "Bangalore"
+        elif pin_prefix3 in [600]:
+            city_cand = "Chennai"
+        elif pin_prefix3 in [400]:
+            city_cand = "Mumbai"
+        elif pin_prefix3 in [110]:
+            city_cand = "New Delhi"
+        elif pin_prefix3 in [500]:
+            city_cand = "Hyderabad"
+        elif pin_prefix3 in [700]:
+            city_cand = "Kolkata"
+        elif pin_prefix3 in [380]:
+            city_cand = "Ahmedabad"
+        elif pin_prefix3 in [411]:
+            city_cand = "Pune"
+        elif pin_prefix3 in [302]:
+            city_cand = "Jaipur"
+        elif pin_prefix3 in [641]:
+            city_cand = "Coimbatore"
+
         pin_map = [
             ([11], "DL"), ([12, 13], "HR"), ([14, 15], "PB"), ([16], "CH"),
             ([17], "HP"), ([18, 19], "JK"), ([20, 21, 22, 23, 24, 25, 26, 27, 28], "UP"),
@@ -254,7 +292,12 @@ def resolve_state_from_postal(postal_code: str, country_hint: Optional[str] = No
         ]
         for prefixes, st_code in pin_map:
             if pin_prefix in prefixes:
-                return resolve_state(st_code, "IN")
+                res = resolve_state(st_code, "IN")
+                if res:
+                    res_copy = dict(res)
+                    if city_cand:
+                        res_copy["city_name"] = city_cand
+                    return res_copy
 
     return None
 
