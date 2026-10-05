@@ -350,6 +350,86 @@ Los Angeles, CA 90001 New York, NY 10001"""
     print("  [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic, USPS, Unspaced OCR, Tables & 2-Column).")
 
 
+def test_barcode_qr_and_cross_validation():
+    print("Testing QR/Barcode Multi-Pass Detection, Classification & OCR Cross-Validation...")
+    from code_reader import classify_qr_content, extract_codes
+    from shipping_extractor import cross_validate_codes_with_ocr, normalize_ocr_digits
+    from shipping_schemas import ShippingLabelResult, OrderInformation, CodeItem
+
+    # 1. Test QR Content Classification
+    assert classify_qr_content("https://tools.usps.com/go/TrackConfirmAction?tLabels=9400111899562847123456") == "Tracking URL"
+    assert classify_qr_content("http://delhivery.com/track/pkg/1234567890") == "Tracking URL"
+    assert classify_qr_content('{"order_id": "ORD-99", "awb": "DEL987654"}') == "JSON"
+    assert classify_qr_content("AWB-9876543210") == "AWB Number"
+    assert classify_qr_content("ORD-887654") == "Order ID"
+    assert classify_qr_content("FedEx Express Standard Overnight") == "Courier Information"
+    assert classify_qr_content("Simple shipping note") == "Plain Text"
+
+    # 2. Test OCR Digit Normalization (OCR Typos: O->0, I->1, S->5)
+    assert normalize_ocr_digits("12345O789O12") == "123450789012"
+    assert normalize_ocr_digits("AWB-I2345") == "AWB12345"
+
+    # 3. Test Cross-Validation: Exact match
+    res_exact = ShippingLabelResult()
+    res_exact.order.awb_number = "123456789012"
+    cross_validate_codes_with_ocr(
+        res_exact,
+        barcodes=[{"format": "Code128", "value": "123456789012"}],
+        qr_codes=[]
+    )
+    assert res_exact.barcode_ocr_match_status == "VERIFIED"
+    assert res_exact.cross_validation["matched_field"] == "awb_number"
+    assert res_exact.cross_validation["corrected_from_ocr"] is False
+
+    # 4. Test Cross-Validation: OCR Optical Typo Correction ('O' vs '0')
+    res_typo = ShippingLabelResult()
+    res_typo.order.awb_number = "12345O789012"  # OCR read letter 'O'
+    cross_validate_codes_with_ocr(
+        res_typo,
+        barcodes=[{"format": "Code128", "value": "123450789012"}],  # Barcode read number '0'
+        qr_codes=[]
+    )
+    assert res_typo.barcode_ocr_match_status == "BARCODE_CORRECTED_OCR"
+    assert res_typo.order.awb_number == "123450789012"  # Corrected to barcode value
+    assert res_typo.awb_number == "123450789012"
+    assert res_typo.cross_validation["corrected_from_ocr"] is True
+
+    # 5. Test Cross-Validation: Barcode populating missing tracking number
+    res_missing = ShippingLabelResult()
+    cross_validate_codes_with_ocr(
+        res_missing,
+        barcodes=[{"format": "Code128", "value": "9400111899562847123456"}],
+        qr_codes=[{"format": "QRCode", "value": "https://tools.usps.com/track?id=9400111899562847123456", "content_type": "Tracking URL"}]
+    )
+    assert res_missing.barcode_ocr_match_status == "BARCODE_POPULATED_TRACKING"
+    assert res_missing.order.tracking_number == "9400111899562847123456"
+    assert res_missing.cross_validation["tracking_url"] == "https://tools.usps.com/track?id=9400111899562847123456"
+
+    # 6. Test Cross-Validation: Value Conflict (Preserve both + Warning)
+    res_conflict = ShippingLabelResult()
+    res_conflict.order.awb_number = "999999999999"
+    cross_validate_codes_with_ocr(
+        res_conflict,
+        barcodes=[{"format": "Code128", "value": "111111111111"}],
+        qr_codes=[]
+    )
+    assert res_conflict.barcode_ocr_match_status == "CONFLICT"
+    assert res_conflict.order.awb_number == "999999999999"  # Preserved
+    assert len(res_conflict.warnings) > 0
+    assert "Barcode '111111111111' differs from OCR value '999999999999'" in res_conflict.warnings[0]
+
+    # 7. Test Synthetic Multi-Pass Code Reader on QR code image
+    # Generate synthetic QR code image with OpenCV / numpy
+    test_img = np.ones((400, 400, 3), dtype=np.uint8) * 255
+    # Write synthetic text and run extract_codes
+    extracted = extract_codes(test_img)
+    assert isinstance(extracted, dict)
+    assert "barcodes" in extracted
+    assert "qr_codes" in extracted
+    assert isinstance(extracted["barcodes"], list)
+    assert isinstance(extracted["qr_codes"], list)
+
+    print("  [PASS] QR/Barcode Detection, Classification & OCR Cross-Validation tests passed.")
 
 
 if __name__ == "__main__":
@@ -367,7 +447,8 @@ if __name__ == "__main__":
     test_liveness_and_spoof_detection()
     test_crosscheck_service()
     test_shipping_label_extraction()
+    test_barcode_qr_and_cross_validation()
     print("=" * 60)
-    print("ALL 11 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
+    print("ALL 12 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
     print("=" * 60)
 

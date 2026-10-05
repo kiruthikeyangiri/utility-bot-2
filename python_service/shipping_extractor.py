@@ -532,10 +532,150 @@ def disentangle_merged_addresses(result: ShippingLabelResult):
             result.ship_from.country = "United States"
 
 
+def normalize_ocr_digits(text: str) -> str:
+    """Normalizes OCR string by removing punctuation and resolving common optical character substitutions (O->0, I->1, S->5, etc.)."""
+    if not text:
+        return ""
+    sub_map = {
+        "O": "0", "o": "0",
+        "I": "1", "l": "1", "i": "1",
+        "S": "5", "s": "5",
+        "Z": "2", "z": "2"
+    }
+    res = []
+    for ch in str(text).strip():
+        if ch.isalnum():
+            res.append(sub_map.get(ch, ch).upper())
+    return "".join(res)
+
+
+def cross_validate_codes_with_ocr(
+    result: ShippingLabelResult,
+    barcodes: Optional[List[Dict[str, Any]]] = None,
+    qr_codes: Optional[List[Dict[str, Any]]] = None
+) -> None:
+    """
+    Cross-checks decoded Barcode/QR values with OCR-extracted values (AWB, Tracking, Order ID).
+    - If barcode matches OCR (exact or OCR character confusion like O vs 0), marks verified and corrects OCR typo.
+    - If barcode is present but OCR missed the tracking/AWB number, populates the verified barcode value.
+    - If barcode and OCR have conflicting values, preserves both and records an informative warning.
+    - Captures courier tracking URLs from QR codes.
+    - Updates top-level awb_number, tracking_number, barcode_ocr_match_status, and cross_validation metadata.
+    """
+    barcodes = barcodes or []
+    qr_codes = qr_codes or []
+
+    ocr_awb = result.order.awb_number or ""
+    ocr_tracking = result.order.tracking_number or ""
+    ocr_order_id = result.order.order_id or ""
+
+    norm_ocr_awb = normalize_ocr_digits(ocr_awb)
+    norm_ocr_tracking = normalize_ocr_digits(ocr_tracking)
+    norm_ocr_order_id = normalize_ocr_digits(ocr_order_id)
+
+    matched_field = None
+    barcode_match_status = "NO_BARCODE"
+    verified_value = None
+    corrected_from_ocr = False
+    tracking_url = None
+
+    # Check QR codes for Tracking URL or structured payloads
+    for q in qr_codes:
+        q_val = str(q.get("value", "")).strip()
+        q_type = q.get("content_type") or "Unknown"
+        if q_type == "Tracking URL" or re.match(r"^https?://", q_val, re.IGNORECASE):
+            tracking_url = q_val
+            if not result.order.remarks and "track" in q_val.lower():
+                result.order.remarks = f"Tracking Portal: {q_val}"
+
+    # Analyze barcodes against OCR fields
+    if barcodes:
+        barcode_match_status = "UNVERIFIED"
+        for b in barcodes:
+            b_val = str(b.get("value", "")).strip()
+            norm_b_val = normalize_ocr_digits(b_val)
+            if not norm_b_val:
+                continue
+
+            # 1. Match against AWB Number
+            if norm_ocr_awb:
+                if b_val == ocr_awb:
+                    matched_field = "awb_number"
+                    barcode_match_status = "VERIFIED"
+                    verified_value = b_val
+                    break
+                elif norm_b_val == norm_ocr_awb or (len(norm_b_val) >= 8 and norm_b_val in norm_ocr_awb) or (len(norm_ocr_awb) >= 8 and norm_ocr_awb in norm_b_val):
+                    matched_field = "awb_number"
+                    barcode_match_status = "BARCODE_CORRECTED_OCR"
+                    verified_value = b_val
+                    result.order.awb_number = b_val
+                    corrected_from_ocr = True
+                    break
+
+            # 2. Match against Tracking Number
+            if norm_ocr_tracking:
+                if b_val == ocr_tracking:
+                    matched_field = "tracking_number"
+                    barcode_match_status = "VERIFIED"
+                    verified_value = b_val
+                    break
+                elif norm_b_val == norm_ocr_tracking or (len(norm_b_val) >= 8 and norm_b_val in norm_ocr_tracking) or (len(norm_ocr_tracking) >= 8 and norm_ocr_tracking in norm_b_val):
+                    matched_field = "tracking_number"
+                    barcode_match_status = "BARCODE_CORRECTED_OCR"
+                    verified_value = b_val
+                    result.order.tracking_number = b_val
+                    corrected_from_ocr = True
+                    break
+
+            # 3. Match against Order ID
+            if norm_ocr_order_id and (b_val == ocr_order_id or norm_b_val == norm_ocr_order_id):
+                matched_field = "order_id"
+                barcode_match_status = "VERIFIED"
+                verified_value = b_val
+                break
+
+        # If no match was found yet, check if primary barcode looks like an AWB / Tracking number
+        if not verified_value:
+            for b in barcodes:
+                b_val = str(b.get("value", "")).strip()
+                # 8 to 35 alphanumeric tracking / barcode digits
+                if re.match(r"^[0-9A-Za-z]{8,35}$", b_val) and re.search(r"\d", b_val):
+                    if not result.order.tracking_number and not result.order.awb_number:
+                        result.order.tracking_number = b_val
+                        result.order.awb_number = b_val
+                        matched_field = "tracking_number"
+                        barcode_match_status = "BARCODE_POPULATED_TRACKING"
+                        verified_value = b_val
+                        break
+                    elif ocr_awb or ocr_tracking:
+                        # Value conflict between barcode and OCR
+                        existing_val = ocr_awb or ocr_tracking
+                        barcode_match_status = "CONFLICT"
+                        result.warnings.append(
+                            f"Barcode '{b_val}' differs from OCR value '{existing_val}' (both preserved)."
+                        )
+
+    # Synchronize top-level aliases
+    result.awb_number = result.order.awb_number
+    result.tracking_number = result.order.tracking_number
+    result.barcode_ocr_match_status = barcode_match_status
+    result.cross_validation = {
+        "status": barcode_match_status,
+        "matched_field": matched_field,
+        "verified_value": verified_value,
+        "corrected_from_ocr": corrected_from_ocr,
+        "tracking_url": tracking_url,
+        "barcodes_count": len(barcodes),
+        "qr_codes_count": len(qr_codes)
+    }
+
+
 def extract_shipping_label_data(
     ocr_raw_text: str,
     ocr_layout_text: str = "",
-    ocr_words: Optional[List[Dict[str, Any]]] = None
+    ocr_words: Optional[List[Dict[str, Any]]] = None,
+    barcodes: Optional[List[Dict[str, Any]]] = None,
+    qr_codes: Optional[List[Dict[str, Any]]] = None
 ) -> ShippingLabelResult:
     """
     Layout & Heuristic Spatial Shipping Label Extractor.
@@ -725,6 +865,9 @@ def extract_shipping_label_data(
     # Disentangle merged multi-column address lines if present
     disentangle_merged_addresses(result)
 
+    # Cross-validate codes (Barcodes and QR) with OCR
+    cross_validate_codes_with_ocr(result, barcodes, qr_codes)
+
     return result
 
 
@@ -803,7 +946,9 @@ def extract_shipping_info_llm(
     ocr_words: Optional[List[Dict[str, Any]]] = None,
     api_key: Optional[str] = None,
     model_name: Optional[str] = None,
-    temperature: float = 0.0
+    temperature: float = 0.0,
+    barcodes: Optional[List[Dict[str, Any]]] = None,
+    qr_codes: Optional[List[Dict[str, Any]]] = None
 ) -> ShippingLabelResult:
     """
     LLM-powered shipping label extraction.
@@ -817,7 +962,9 @@ def extract_shipping_info_llm(
     heuristic_res = extract_shipping_label_data(
         ocr_raw_text=ocr_raw_text,
         ocr_layout_text=ocr_layout_text,
-        ocr_words=ocr_words
+        ocr_words=ocr_words,
+        barcodes=barcodes,
+        qr_codes=qr_codes
     )
 
     client = get_groq_client(api_key)
@@ -1011,6 +1158,9 @@ Return only valid JSON adhering strictly to the schema."""
         # Post-validation checks
         check_and_align_sender_receiver(result)
         disentangle_merged_addresses(result)
+
+        # Cross-validate codes (Barcodes and QR) with OCR fields
+        cross_validate_codes_with_ocr(result, barcodes, qr_codes)
 
         return result
     except Exception:

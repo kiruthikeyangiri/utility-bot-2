@@ -650,20 +650,25 @@ async def extract_shipping_labels(
             ocr_conf = 0.0
             ocr_words = []
 
+        raw_barcodes = codes_dict.get("barcodes", [])
+        raw_qrcodes = codes_dict.get("qr_codes", [])
+
         # 6. Extract Shipping Fields via LLM (RapidOCR output -> LLM understands & separates data)
         label_res = extract_shipping_info_llm(
             ocr_raw_text=ocr_raw_text,
             ocr_layout_text=ocr_layout_text,
             ocr_words=ocr_words,
             api_key=groq_api_key,
-            model_name=model_name
+            model_name=model_name,
+            barcodes=raw_barcodes,
+            qr_codes=raw_qrcodes
         )
 
         label_res.image_name = filename
         label_res.image_index = idx
         label_res.ocr_confidence = ocr_conf
-        label_res.barcodes = [CodeItem(**c) for c in codes_dict.get("barcodes", [])]
-        label_res.qr_codes = [CodeItem(**c) for c in codes_dict.get("qr_codes", [])]
+        label_res.barcodes = [CodeItem(**c) for c in raw_barcodes]
+        label_res.qr_codes = [CodeItem(**c) for c in raw_qrcodes]
 
         results.append(label_res)
 

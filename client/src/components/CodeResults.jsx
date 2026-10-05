@@ -175,10 +175,15 @@ export default function CodeResults({ barcodes = [], qr_codes = [] }) {
                       <QrCode className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                         <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200">
                           {item.format || 'QRCode'}
                         </span>
+                        {item.content_type && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                            {item.content_type}
+                          </span>
+                        )}
                         <span className="text-[11px] text-slate-400 font-mono">
                           #{idx + 1}
                         </span>

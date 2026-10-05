@@ -8,7 +8,16 @@ import {
   AlertTriangle,
   Copy,
   Check,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck,
+  Truck,
+  Package,
+  ShoppingBag,
+  ExternalLink,
+  Calendar,
+  CreditCard,
+  Tag,
+  QrCode
 } from 'lucide-react';
 import CodeResults from './CodeResults';
 import JsonViewer from './JsonViewer';
@@ -282,6 +291,124 @@ function SingleLabelCard({ label, index }) {
               </div>
 
             </div>
+
+            {/* 2. ORDER & TRACKING SECTION */}
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-4 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+                <div className="flex items-center space-x-2 text-slate-800">
+                  <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    <Truck className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider">Order & Tracking Identification</h4>
+                </div>
+
+                {/* Cross-Validation status tag */}
+                {label.barcode_ocr_match_status === 'VERIFIED' && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>OCR Verified by Barcode</span>
+                  </span>
+                )}
+                {label.barcode_ocr_match_status === 'BARCODE_CORRECTED_OCR' && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-sky-50 text-sky-800 border border-sky-200 text-[11px] font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5 text-sky-600" />
+                    <span>OCR Corrected via Barcode</span>
+                  </span>
+                )}
+                {label.barcode_ocr_match_status === 'BARCODE_POPULATED_TRACKING' && (
+                  <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 text-[11px] font-bold">
+                    <Barcode className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Tracking Sourced from Barcode</span>
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                  <span className="text-[11px] text-slate-500 font-medium block">AWB / Air Waybill Number</span>
+                  <span className="font-mono font-bold text-slate-900 text-sm break-all">
+                    {order.awb_number || label.awb_number || <span className="text-slate-400 font-normal italic">None</span>}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                  <span className="text-[11px] text-slate-500 font-medium block">Tracking Number</span>
+                  <span className="font-mono font-bold text-slate-900 text-sm break-all">
+                    {order.tracking_number || label.tracking_number || <span className="text-slate-400 font-normal italic">None</span>}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                  <span className="text-[11px] text-slate-500 font-medium block">Order ID / Ref</span>
+                  <span className="font-mono font-bold text-slate-900 text-sm break-all">
+                    {order.order_id || <span className="text-slate-400 font-normal italic">None</span>}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                  <span className="text-[11px] text-slate-500 font-medium block">Shipping / Dispatch Date</span>
+                  <span className="font-semibold text-slate-800">
+                    {order.shipping_date || <span className="text-slate-400 font-normal italic">—</span>}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                  <span className="text-[11px] text-slate-500 font-medium block">Payment Type</span>
+                  <span className="font-semibold text-slate-800">
+                    {order.payment_type || <span className="text-slate-400 font-normal italic">—</span>}
+                  </span>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                  <span className="text-[11px] text-slate-500 font-medium block">Package Weight</span>
+                  <span className="font-semibold text-slate-800">
+                    {pkg.weight || <span className="text-slate-400 font-normal italic">—</span>}
+                  </span>
+                </div>
+              </div>
+
+              {order.remarks && (
+                <div className="text-xs bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                  <span className="text-[11px] text-slate-500 font-medium block">Remarks / Notes</span>
+                  <span className="text-slate-700">{order.remarks}</span>
+                </div>
+              )}
+            </div>
+
+            {/* 3. ITEMS MANIFEST (If any) */}
+            {items && items.length > 0 && (
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center space-x-2 pb-2 border-b border-slate-100 text-slate-800">
+                  <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
+                    <ShoppingBag className="w-4 h-4" />
+                  </div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider">Product Manifest ({items.length})</h4>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 text-slate-600 font-semibold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                      <tr>
+                        <th className="p-2.5">Product Description</th>
+                        <th className="p-2.5 text-center">Qty</th>
+                        <th className="p-2.5 text-right">Price</th>
+                        <th className="p-2.5 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {items.map((it, iIdx) => (
+                        <tr key={iIdx} className="hover:bg-slate-50/50">
+                          <td className="p-2.5 font-medium text-slate-800">{it.product}</td>
+                          <td className="p-2.5 text-center font-mono text-slate-600">{it.quantity ?? '—'}</td>
+                          <td className="p-2.5 text-right font-mono text-slate-600">{it.price ? `${it.currency || 'INR'} ${it.price}` : '—'}</td>
+                          <td className="p-2.5 text-right font-mono font-bold text-slate-900">{it.total ? `${it.currency || 'INR'} ${it.total}` : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
           </div>
         )}

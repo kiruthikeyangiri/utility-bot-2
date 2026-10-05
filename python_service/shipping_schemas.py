@@ -55,6 +55,7 @@ class ShippingItem(BaseModel):
 class CodeItem(BaseModel):
     format: str
     value: str
+    content_type: Optional[str] = None
 
 
 class ShippingLabelResult(BaseModel):
@@ -65,8 +66,12 @@ class ShippingLabelResult(BaseModel):
     order: OrderInformation = Field(default_factory=OrderInformation)
     package: PackageInformation = Field(default_factory=PackageInformation)
     items: List[ShippingItem] = Field(default_factory=list)
+    awb_number: Optional[str] = None
+    tracking_number: Optional[str] = None
     barcodes: List[CodeItem] = Field(default_factory=list)
     qr_codes: List[CodeItem] = Field(default_factory=list)
+    barcode_ocr_match_status: Optional[str] = None
+    cross_validation: Optional[Dict[str, Any]] = None
     ocr_confidence: float = 0.0
     raw_ocr_text: Optional[str] = ""
     warnings: List[str] = Field(default_factory=list)
