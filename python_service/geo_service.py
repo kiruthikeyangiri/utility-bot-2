@@ -210,3 +210,51 @@ def resolve_state(
         return candidates[0]
 
     return None
+
+
+def resolve_state_from_postal(postal_code: str, country_hint: Optional[str] = None) -> Optional[Dict[str, str]]:
+    """Infers state and country from 5-digit US ZIP code or 6-digit Indian PIN code."""
+    if not postal_code:
+        return None
+    p_clean = re.sub(r"[^\d]", "", str(postal_code).strip())
+    
+    # 1. US 5-Digit ZIP Code Range Mapping
+    if len(p_clean) == 5 and (not country_hint or "US" in country_hint.upper() or "UNITED" in country_hint.upper()):
+        zip_int = int(p_clean)
+        zip_state_map = [
+            (1000, 2799, "MA"), (2800, 2999, "RI"), (3000, 3899, "NH"), (3900, 4999, "ME"),
+            (5000, 5999, "VT"), (6000, 6999, "CT"), (7000, 8999, "NJ"), (10000, 14999, "NY"),
+            (15000, 19699, "PA"), (20000, 20099, "DC"), (20600, 21999, "MD"), (22000, 24699, "VA"),
+            (27000, 28999, "NC"), (29000, 29999, "SC"), (30000, 31999, "GA"), (32000, 34999, "FL"),
+            (35000, 36999, "AL"), (37000, 38599, "TN"), (38600, 39799, "MS"), (40000, 42799, "KY"),
+            (43000, 45999, "OH"), (46000, 47999, "IN"), (48000, 49999, "MI"), (50000, 52899, "IA"),
+            (53000, 54999, "WI"), (55000, 56799, "MN"), (57000, 57799, "SD"), (58000, 58899, "ND"),
+            (59000, 59999, "MT"), (60000, 62999, "IL"), (63000, 65899, "MO"), (66000, 67999, "KS"),
+            (68000, 69399, "NE"), (70000, 71499, "LA"), (71600, 72999, "AR"), (73000, 74999, "OK"),
+            (75000, 79999, "TX"), (80000, 81699, "CO"), (82000, 83199, "WY"), (83200, 83899, "ID"),
+            (84000, 84799, "UT"), (85000, 86599, "AZ"), (87000, 88499, "NM"), (88900, 89899, "NV"),
+            (90000, 96199, "CA"), (96700, 96899, "HI"), (97000, 97999, "OR"), (98000, 99499, "WA"),
+            (99500, 99999, "AK")
+        ]
+        for z_min, z_max, st_code in zip_state_map:
+            if z_min <= zip_int <= z_max:
+                return resolve_state(st_code, "US")
+
+    # 2. Indian 6-Digit PIN Code Range Mapping
+    if len(p_clean) == 6 and (not country_hint or "IN" in country_hint.upper() or "INDIA" in country_hint.upper()):
+        pin_prefix = int(p_clean[:2])
+        pin_map = [
+            ([11], "DL"), ([12, 13], "HR"), ([14, 15], "PB"), ([16], "CH"),
+            ([17], "HP"), ([18, 19], "JK"), ([20, 21, 22, 23, 24, 25, 26, 27, 28], "UP"),
+            ([30, 31, 32, 33, 34], "RJ"), ([36, 37, 38, 39], "GJ"), ([40, 41, 42, 43, 44], "MH"),
+            ([45, 46, 47, 48], "MP"), ([49], "CT"), ([50, 51, 52, 53], "AP"),
+            ([56, 57, 58, 59], "KA"), ([60, 61, 62, 63, 64], "TN"), ([67, 68, 69], "KL"),
+            ([70, 71, 72, 73, 74], "WB"), ([75, 76, 77], "OR"), ([78], "AS"),
+            ([80, 81, 82, 83, 84, 85], "BR")
+        ]
+        for prefixes, st_code in pin_map:
+            if pin_prefix in prefixes:
+                return resolve_state(st_code, "IN")
+
+    return None
+

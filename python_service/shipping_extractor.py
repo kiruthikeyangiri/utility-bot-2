@@ -80,7 +80,7 @@ STATE_ABBRS = {
     "DL": "Delhi", "PY": "Puducherry", "CH": "Chandigarh", "JK": "Jammu and Kashmir"
 }
 
-from geo_service import resolve_country, resolve_state
+from geo_service import resolve_country, resolve_state, resolve_state_from_postal
 
 MONTH_MAP = {
     "JAN": "01", "FEB": "02", "MAR": "03", "APR": "04", "MAY": "05", "JUN": "06",
@@ -336,12 +336,14 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
         l_str = l.strip()
         if not l_str:
             continue
-        # Skip postage, tracking, payment, or table lines inside address block
-        if _is_postage_line(l_str):
+        # Skip postage, payment, or table lines inside address block
+        if _is_postage_line(l_str) or _is_table_or_payment_line(l_str):
             continue
-        if _is_table_or_payment_line(l_str):
+        # Strip trailing metadata in line (e.g. ', REMARKS: NO REMARKS, TRACK 123456789 US')
+        l_str = re.sub(r",?\s*(?:REMARKS|NO\s*REMARKS|TRACK\b|TRACKING\b|AWB\b|ORDER\s*(?:ID|NO|#)?|WT\b|WEIGHT\b)[:\s].*$", "", l_str, flags=re.IGNORECASE).strip()
+        if not l_str:
             continue
-        if re.search(r"\b(?:USPSTRACKING|TRACKING|BARCODE)\b", l_str, re.IGNORECASE):
+        if re.search(r"^(?:USPSTRACKING|TRACKING|BARCODE|NO\s*REMARKS|REMARKS|ORDER\s*(?:ID|NO|#)?|AIR\s*WAYBILL|AWB)\s*[:\-]?", l_str, re.IGNORECASE) and len(l_str) < 30:
             continue
         if re.search(r"^\d{16,}$", l_str):  # Long tracking digits sequence
             continue
@@ -354,6 +356,7 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
 
         # 1. Strip address label prefixes like "Add:", "Addr:", "Address:"
         line_clean = re.sub(r"^(?:ADD|ADDR|ADDRESS|DELIVERY ADDRESS|SHIPPING ADDRESS|SHIP TO|SHIP FROM|RETURN ADDRESS)\s*[:\-]?", "", line_clean, flags=re.IGNORECASE).strip()
+        line_clean = re.sub(r",?\s*(?:REMARKS|NO\s*REMARKS|TRACK\b|TRACKING\b|AWB\b|ORDER\s*(?:ID|NO|#)?|WT\b|WEIGHT\b)[:\s].*$", "", line_clean, flags=re.IGNORECASE).strip()
         if not line_clean:
             idx += 1
             continue
@@ -441,6 +444,19 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
                 idx += 1
                 continue
 
+        # Pattern D: Street Address ending with recognizable City
+        m_city_tail = re.search(r"^(.+?)[,\s]+(New York|Los Angeles|Chicago|Houston|Phoenix|Philadelphia|San Antonio|San Diego|Dallas|San Jose|Austin|Jacksonville|San Francisco|Columbus|Indianapolis|Seattle|Denver|Washington|Boston|El Paso|Nashville|Detroit|Oklahoma City|Portland|Las Vegas|Memphis|Louisville|Baltimore|Milwaukee|Albuquerque|Tucson|Fresno|Mesa|Sacramento|Atlanta|Miami|Raleigh|Omaha|Oakland|Minneapolis|Tampa|New Orleans|Wichita|Cleveland|Bakersfield|Anaheim|Honolulu|Santa Ana|Riverside|Corpus Christi|Lexington|Stockton|Saint Paul|Cincinnati|Pittsburgh|Orlando|Irvine|Newark|Toledo|Jersey City|Buffalo|Salt Lake City|Mumbai|Delhi|Bangalore|Bengaluru|Hyderabad|Ahmedabad|Chennai|Kolkata|Surat|Pune|Jaipur|Lucknow|Kanpur|Nagpur|Indore|Thane|Bhopal|Visakhapatnam|Patna|Vadodara|Ghaziabad|Ludhiana|Agra|Nashik|Faridabad|Meerut|Rajkot|Varanasi|Srinagar|Aurangabad|Amritsar|Allahabad|Ranchi|Gwalior|Jabalpur|Coimbatore|Vijayawada|Jodhpur|Madurai|Raipur|Kota|Guwahati|Chandigarh|Mysore|Mysuru|Noida|Gurgaon|Gurugram|Kochi|Dehradun|Toronto|Vancouver|Montreal|Calgary|Ottawa|Edmonton|Sydney|Melbourne|Brisbane|Perth|Adelaide|London|Manchester|Birmingham|Liverpool|Leeds|Glasgow|Edinburgh|Paris|Berlin|Munich|Frankfurt|Tokyo|Beijing|Shanghai|Dubai|Singapore)\s*$", line_clean, re.IGNORECASE)
+        if m_city_tail and not contact["city"]:
+            contact["city"] = m_city_tail.group(2).title()
+            street_part = m_city_tail.group(1).strip()
+            if not contact["state"]:
+                st_cand = resolve_state(m_city_tail.group(2), contact.get("country"))
+                if st_cand:
+                    contact["state"] = st_cand["state_name"]
+                    if not contact["country"]:
+                        contact["country"] = st_cand["country_name"]
+            line_clean = street_part
+
         # 6. Postal / PIN Code check
         if not contact["postal_code"]:
             m_pin = re.search(r"\b(?:PIN|PINCODE|PIN\s*CODE|ZIP|POSTAL)?\s*[:\-]?\s*([1-9][0-9]{4,5}(?:-[0-9]{4})?)\b", line_clean, re.IGNORECASE)
@@ -495,6 +511,30 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
             if any(kw in candidate_name.upper() for kw in ["WAREHOUSE", "LOGISTICS", "STORE", "INC", "CORP", "LTD", "COMPANY", "CO", "FLIPKART", "AMAZON", "ENTERPRISES", "HUB"]):
                 contact["company"] = candidate_name
             address_parts = address_parts[1:]
+
+    # Resolve State and Country from Postal Code if missing
+    if contact["postal_code"] and (not contact["state"] or not contact["country"]):
+        p_res = resolve_state_from_postal(contact["postal_code"], contact.get("country"))
+        if p_res:
+            if not contact["state"]:
+                contact["state"] = p_res["state_name"]
+            if not contact["country"]:
+                contact["country"] = p_res["country_name"]
+
+    # Extract City from address tokens if missing
+    if not contact["city"] and address_parts:
+        city_regex = r"\b(New York|Los Angeles|Chicago|Houston|Phoenix|Philadelphia|San Antonio|San Diego|Dallas|San Jose|Austin|Jacksonville|San Francisco|Columbus|Indianapolis|Seattle|Denver|Washington|Boston|El Paso|Nashville|Detroit|Oklahoma City|Portland|Las Vegas|Memphis|Louisville|Baltimore|Milwaukee|Albuquerque|Tucson|Fresno|Mesa|Sacramento|Atlanta|Miami|Raleigh|Omaha|Oakland|Minneapolis|Tampa|New Orleans|Wichita|Cleveland|Bakersfield|Anaheim|Honolulu|Santa Ana|Riverside|Corpus Christi|Lexington|Stockton|Saint Paul|Cincinnati|Pittsburgh|Orlando|Irvine|Newark|Toledo|Jersey City|Buffalo|Salt Lake City|Mumbai|Delhi|Bangalore|Bengaluru|Hyderabad|Ahmedabad|Chennai|Kolkata|Surat|Pune|Jaipur|Lucknow|Kanpur|Nagpur|Indore|Thane|Bhopal|Visakhapatnam|Patna|Vadodara|Ghaziabad|Ludhiana|Agra|Nashik|Faridabad|Meerut|Rajkot|Varanasi|Srinagar|Aurangabad|Amritsar|Allahabad|Ranchi|Gwalior|Jabalpur|Coimbatore|Vijayawada|Jodhpur|Madurai|Raipur|Kota|Guwahati|Chandigarh|Mysore|Mysuru|Noida|Gurgaon|Gurugram|Kochi|Dehradun|Toronto|Vancouver|Montreal|Calgary|Ottawa|Edmonton|Sydney|Melbourne|Brisbane|Perth|Adelaide|London|Manchester|Birmingham|Liverpool|Leeds|Glasgow|Edinburgh|Paris|Berlin|Munich|Frankfurt|Tokyo|Beijing|Shanghai|Dubai|Singapore)\b"
+        for ap in address_parts:
+            m_c = re.search(city_regex, ap, re.IGNORECASE)
+            if m_c:
+                contact["city"] = m_c.group(1).title()
+                if not contact["state"]:
+                    st_cand = resolve_state(m_c.group(1), contact.get("country"))
+                    if st_cand:
+                        contact["state"] = st_cand["state_name"]
+                        if not contact["country"]:
+                            contact["country"] = st_cand["country_name"]
+                break
 
     # Construct overall address string
     if address_parts:
@@ -891,8 +931,8 @@ def extract_shipping_label_data(
                 if s: from_lines.append(s)
                 continue
 
-            # Section breakers
-            if any(kw in line.upper() for kw in ["ORDER ID", "TRACKING", "AWB", "INVOICE", "PACKAGE WEIGHT", "TOTAL AMOUNT"]) or _is_table_header(line):
+            # Section breakers (only for standalone metadata headers, not inline address text)
+            if re.match(r"^(?:ORDER\s*(?:ID|NO|NUMBER|#)?|TRACKING\s*(?:NO|NUMBER|#)?|AWB\s*(?:NO|NUMBER|#)?|INVOICE\s*NO|PACKAGE\s*WEIGHT|TOTAL\s*AMOUNT)\s*[:\-]", line.strip(), re.IGNORECASE) or _is_table_header(line):
                 current_section = None
 
             if current_section == "TO":

@@ -475,6 +475,30 @@ def test_shipping_date_and_geo_service():
     ocr_sample3 = "Mailed from ZIP 11212\nDate: 2024-09-20"
     assert extract_shipping_date(ocr_sample3) == "2024-09-20"
 
+    # 5. Test User Label Specific City / State Resolution & Noise Filtering
+    from shipping_extractor import extract_shipping_label_data
+    label_text = """SHIP TO:
+John Doe
+123 Main Street, Apt 4 B, New York
+10001
+
+SHIP FROM:
+ACME Corporation
+456 Industrial Blvd, Los Angeles, REMARKS: NO REMARKS, TRACK 123456789 US
+90001"""
+    res_label = extract_shipping_label_data(label_text, label_text)
+    assert res_label.ship_to.city == "New York"
+    assert res_label.ship_to.state == "New York"
+    assert res_label.ship_to.country == "United States"
+    assert res_label.ship_to.postal_code == "10001"
+    
+    assert res_label.ship_from.city == "Los Angeles"
+    assert res_label.ship_from.state == "California"
+    assert res_label.ship_from.country == "United States"
+    assert res_label.ship_from.postal_code == "90001"
+    assert "REMARKS" not in (res_label.ship_from.address or "")
+    assert "TRACK" not in (res_label.ship_from.address or "")
+
     print("  [PASS] Global Geo Service & Shipping Date Normalization tests passed.")
 
 
