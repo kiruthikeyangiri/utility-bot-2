@@ -149,32 +149,43 @@ flowchart TD
 ```
 [1 to 3 Shipping Label Images] (JPG, JPEG, PNG)
          │
-         ├───> [Image 1] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Result Card #1]
-         ├───> [Image 2] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Result Card #2]
-         └───> [Image 3] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Result Card #3]
+         ├───> [Image 1] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Cross-Validation & Geo Match] ───> [Result Card #1]
+         ├───> [Image 2] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Cross-Validation & Geo Match] ───> [Result Card #2]
+         └───> [Image 3] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Cross-Validation & Geo Match] ───> [Result Card #3]
 ```
 
 1. **Multi-Image Upload (Max 3 Images)**:
    - Operators can upload **1, 2, or 3 images simultaneously** (JPG, JPEG, PNG).
    - Each image is executed **strictly independently** through the extraction pipeline without data cross-contamination.
 2. **Multi-Pass Barcode & QR Code Engine (`code_reader.py`)**:
-   - **Pass 1:** Native high-speed `zxing-cpp` scan across 1D/2D symbologies (Code 128, Code 39, EAN-13, QR Code, Data Matrix, PDF417).
-   - **Pass 2 (Image Enhancement):** Grayscale $\to$ $2\times$ Upscale $\to$ CLAHE contrast equalization $\to$ Kernel sharpening.
+   - **Pass 1:** Native high-speed `zxing-cpp` scan across 1D/2D symbologies (Code 128, Code 39, EAN-13, EAN-8, UPC-A, UPC-E, ITF, QR Code, Data Matrix, Aztec, PDF417).
+   - **Pass 2 (Image Enhancement):** Grayscale $\to$ $1.5\times$ Upscale $\to$ CLAHE contrast equalization $\to$ Kernel sharpening.
    - **Pass 3 (Multi-Angle Thresholding):** Otsu and adaptive thresholding with $90^\circ$, $180^\circ$, and $270^\circ$ rotations.
    - **Pass 4 (OpenCV Fallback):** `cv2.QRCodeDetector` recovery.
+   - **QR Content Classification:** Automatically classifies QR payloads (`Tracking URL`, `AWB Number`, `Shipment ID`, `Order ID`, `Courier Information`, `JSON`, `Plain Text`).
    - **Deduplication:** Automatically deduplicates codes using `(format, value)`.
-3. **Spatial 2-Column Layout Reconstructor (`shipping_extractor.py`)**:
-   - Detects side-by-side / two-column layouts (e.g., Destination block on left, Return/Shipper block on right).
-   - Re-orders the reading stream column-by-column (reads full Left Column top-to-bottom, then Right Column top-to-bottom), completely eliminating horizontal text concatenation bugs.
-4. **Intelligent Field Extraction & Post-Processing**:
+3. **OCR + Barcode Cross-Validation (`shipping_extractor.py`)**:
+   - **OCR Typo Correction (`O` vs `0`, `I` vs `1`):** Resolves OCR character confusion (e.g. `12345O789012` is corrected to `123450789012` with status `BARCODE_CORRECTED_OCR`).
+   - **Verification Badges:** Matches barcodes with OCR AWB Number, Tracking Number, and Order ID, marking verified fields (`VERIFIED`).
+   - **Missing Tracking Population:** Uses primary barcode to populate missing tracking numbers (`BARCODE_POPULATED_TRACKING`).
+   - **Conflict Handling:** When barcode and OCR differ, preserves both values and records a warning banner.
+4. **Global Geographic Dataset & Resolution Engine (`geo_service.py`)**:
+   - Backed by worldwide `countries.csv` and `states.csv` datasets.
+   - Accurately resolves state abbreviations (e.g. `TX` $\to$ `Texas`, `KA` $\to$ `Karnataka`, `ON` $\to$ `Ontario`, `NSW` $\to$ `New South Wales`) and standardizes countries.
+5. **Shipping Date Normalization Engine**:
+   - Extracts and standardizes international dates into ISO `YYYY-MM-DD`.
+   - Supports textual formats (`05 Oct 2026`, `15-August-2024`, `OCT 5 2026`, `24-FEB-25`), European/Indian numeric formats (`DD/MM/YYYY`), and labeled dispatch headers.
+6. **Spatial 2-Column Layout Reconstructor (`shipping_extractor.py`)**:
+   - Detects side-by-side / two-column layouts (Destination block on left, Return/Shipper block on right).
+   - Re-orders the reading stream column-by-column, completely eliminating horizontal text concatenation bugs.
+7. **Intelligent Field Extraction & Post-Processing**:
    - **SHIP TO (Receiver):** Name, Phone, Email, Address, City, State, Postal Code, Country.
    - **SHIP FROM (Sender):** Name, Company, Phone, Email, Address, City, State, Postal Code, Country.
    - **ORDER & TRACKING:** Order ID, Tracking Number, AWB Number, Shipping Date, Payment Type (`COD` / `PREPAID`), Remarks.
    - **PACKAGE INFORMATION:** Weight (e.g. `5oz`, `1.5 KG`) and Dimensions.
-   - **PRODUCT ITEMS MANIFEST:** Pipe-separated (`|`) and space-delimited table rows parsed into product name, quantity, unit price, and total amount.
-   - **Entity Disentanglement:** Validates 10–12 digit phone numbers (retains non-digit text in address) and routes corporate names to `SHIP FROM` and individual customer names to `SHIP TO`.
-5. **Multi-Card Interactive UI**:
-   - Displays dedicated result cards per uploaded label with **Details**, **OCR Text**, **Barcode / QR**, and **JSON Payload** tabs.
+   - **PRODUCT ITEMS MANIFEST:** Product name, quantity, unit price, currency, and total amount.
+8. **Multi-Card Interactive UI**:
+   - Displays dedicated result cards per uploaded label with **Details** (with verification badges), **OCR Text**, **Barcode / QR** (with content type tags), and **JSON Payload** tabs.
 
 ---
 
@@ -301,7 +312,7 @@ docker run -p 8000:8000 utility-bot
 
 ## 🧪 Automated Verification Suite
 
-Run the comprehensive 11-module automated test suite covering all regex heuristics, validation rules, SFace biometrics, cross-checks, and multi-column shipping labels:
+Run the comprehensive 13-module automated test suite covering all regex heuristics, validation rules, SFace biometrics, cross-checks, multi-pass barcode/QR decoding, global geo resolution, and shipping date normalization:
 
 ```powershell
 python python_service/test_pipeline.py
@@ -333,8 +344,12 @@ Testing Multi-Document Cross-Verification...
   [PASS] Multi-Document Cross-Verification tests passed.
 Testing Shipping Label LLM & Heuristic Extraction...
   [PASS] Shipping Label LLM & Heuristic Extraction tests passed (Domestic, USPS, Unspaced OCR, Tables & 2-Column).
+Testing QR/Barcode Multi-Pass Detection, Classification & OCR Cross-Validation...
+  [PASS] QR/Barcode Detection, Classification & OCR Cross-Validation tests passed.
+Testing Global Geo Service & Shipping Date Normalization...
+  [PASS] Global Geo Service & Shipping Date Normalization tests passed.
 ============================================================
-ALL 11 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]
+ALL 13 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]
 ============================================================
 ```
 
