@@ -80,6 +80,103 @@ STATE_ABBRS = {
     "DL": "Delhi", "PY": "Puducherry", "CH": "Chandigarh", "JK": "Jammu and Kashmir"
 }
 
+from geo_service import resolve_country, resolve_state
+
+MONTH_MAP = {
+    "JAN": "01", "FEB": "02", "MAR": "03", "APR": "04", "MAY": "05", "JUN": "06",
+    "JUL": "07", "AUG": "08", "SEP": "09", "SEPT": "09", "OCT": "10", "NOV": "11", "DEC": "12"
+}
+
+
+def normalize_shipping_date(raw_date: str) -> Optional[str]:
+    """
+    Normalizes international shipping, order and dispatch dates to standard ISO YYYY-MM-DD format.
+    Supports formats like '05 Oct 2026', '15/08/2024', '2024-08-15', 'OCT 5 2026', '24-FEB-25', etc.
+    """
+    if not raw_date:
+        return None
+    d_clean = re.sub(r"^(?:DATE|SHIP\s*DATE|SHIPPING\s*DATE|DISPATCH\s*DATE|ORDER\s*DATE|INVOICE\s*DATE|MAILED|DT)\s*[:\-]?", "", str(raw_date).strip(), flags=re.IGNORECASE).strip()
+    d_clean = re.sub(r"^[,\s\-]+|[,\s\-]+$", "", d_clean)
+
+    # 1. Text Month: "05 Oct 2026", "15-August-2024", "24-FEB-25"
+    m_text = re.search(r"\b(\d{1,2})[\s\-\/\.]([A-Za-z]{3,9})[\s\-\/\.](\d{2,4})\b", d_clean)
+    if m_text:
+        day = int(m_text.group(1))
+        mon_str = m_text.group(2)[:3].upper()
+        yr_val = m_text.group(3)
+        yr = int(yr_val) if len(yr_val) == 4 else (2000 + int(yr_val) if int(yr_val) < 70 else 1900 + int(yr_val))
+        if mon_str in MONTH_MAP and 1 <= day <= 31 and 2000 <= yr <= 2040:
+            return f"{yr:04d}-{MONTH_MAP[mon_str]}-{day:02d}"
+
+    # 2. Text Month Leading: "Oct 05, 2026", "August 15, 2024"
+    m_text_rev = re.search(r"\b([A-Za-z]{3,9})[\s\-\/\.](\d{1,2})(?:st|nd|rd|th)?[\s,\-\/\.]+(\d{2,4})\b", d_clean)
+    if m_text_rev:
+        mon_str = m_text_rev.group(1)[:3].upper()
+        day = int(m_text_rev.group(2))
+        yr_val = m_text_rev.group(3)
+        yr = int(yr_val) if len(yr_val) == 4 else (2000 + int(yr_val) if int(yr_val) < 70 else 1900 + int(yr_val))
+        if mon_str in MONTH_MAP and 1 <= day <= 31 and 2000 <= yr <= 2040:
+            return f"{yr:04d}-{MONTH_MAP[mon_str]}-{day:02d}"
+
+    # 3. ISO format: 2026-10-05 or 2026/10/05
+    m_iso = re.search(r"\b(20\d{2})[\-\/\.](0?[1-9]|1[0-2])[\-\/\.](0?[1-9]|[12]\d|3[01])\b", d_clean)
+    if m_iso:
+        return f"{int(m_iso.group(1)):04d}-{int(m_iso.group(2)):02d}-{int(m_iso.group(3)):02d}"
+
+    # 4. Standard Numeric: DD/MM/YYYY or DD-MM-YYYY or MM/DD/YYYY
+    m_num = re.search(r"\b(0?[1-9]|[12]\d|3[01])[\-\/\.](0?[1-9]|1[0-2])[\-\/\.](20\d{2}|\d{2})\b", d_clean)
+    if m_num:
+        p1 = int(m_num.group(1))
+        p2 = int(m_num.group(2))
+        yr_val = m_num.group(3)
+        yr = int(yr_val) if len(yr_val) == 4 else (2000 + int(yr_val))
+        return f"{yr:04d}-{p2:02d}-{p1:02d}"
+
+    return d_clean
+
+
+def extract_shipping_date(raw_text: str) -> Optional[str]:
+    """Extracts and normalizes shipping / dispatch / order date from OCR text."""
+    if not raw_text:
+        return None
+
+    # Priority 1: Explicitly labeled date patterns
+    labeled_patterns = [
+        r"\b(?:SHIP\s*DATE|SHIPPING\s*DATE|DISPATCH\s*DATE|DATE\s*OF\s*DISPATCH|DISPATCHED\s*ON)\s*[:\-]?\s*([A-Za-z0-9\s,\-\/\.]{6,25})",
+        r"\b(?:ORDER\s*DATE|BOOKING\s*DATE|INVOICE\s*DATE|MAILED\s*DATE|MAILED)\s*[:\-]?\s*([A-Za-z0-9\s,\-\/\.]{6,25})",
+        r"\b(?:DATE|DT)\s*[:\-]\s*([A-Za-z0-9\s,\-\/\.]{6,25})"
+    ]
+    for pat in labeled_patterns:
+        m = re.search(pat, raw_text, re.IGNORECASE)
+        if m:
+            norm = normalize_shipping_date(m.group(1).strip())
+            if norm and re.match(r"^20\d{2}-\d{2}-\d{2}$", norm):
+                return norm
+
+    # Priority 2: Text Month date anywhere in OCR text (e.g. "05 Oct 2026", "15-AUG-2024")
+    m_month = re.search(r"\b(\d{1,2}[\s\-\/\.](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*[\s\-\/\.]\d{2,4})\b", raw_text, re.IGNORECASE)
+    if m_month:
+        norm = normalize_shipping_date(m_month.group(1))
+        if norm:
+            return norm
+
+    m_month_rev = re.search(r"\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*[\s\-\/\.]\d{1,2}(?:st|nd|rd|th)?[\s,\-\/\.]+\d{2,4})\b", raw_text, re.IGNORECASE)
+    if m_month_rev:
+        norm = normalize_shipping_date(m_month_rev.group(1))
+        if norm:
+            return norm
+
+    # Priority 3: Standalone date patterns
+    m_standalone = re.search(r"\b(20[2-3]\d[\-\/\.](?:0[1-9]|1[0-2])[\-\/\.](?:0[1-9]|[12]\d|3[01]))\b", raw_text)
+    if m_standalone:
+        return normalize_shipping_date(m_standalone.group(1))
+
+    m_standalone_eu = re.search(r"\b((?:0?[1-9]|[12]\d|3[01])[\-\/\.](?:0?[1-9]|1[0-2])[\-\/\.]20[2-3]\d)\b", raw_text)
+    if m_standalone_eu:
+        return normalize_shipping_date(m_standalone_eu.group(1))
+
+    return None
+
 POSTAGE_PATTERNS = [
     r"^\d+(?:\.\d+)?\s*(?:oz|lb|lbs|kg|g)\b",
     r"first[- ]class",
@@ -287,53 +384,62 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
                 idx += 1
                 continue
 
-        # 4. Country check
-        if re.search(r"\b(?:UNITED\s*STATES|USA|U\.S\.A\.|US)\b", line_clean, re.IGNORECASE):
-            contact["country"] = "United States"
-            line_clean = re.sub(r"\b(?:UNITED\s*STATES|USA|U\.S\.A\.|US)\b", "", line_clean, flags=re.IGNORECASE).strip()
-        elif re.search(r"\b(?:INDIA|IND|BHARAT)\b", line_clean, re.IGNORECASE):
-            contact["country"] = "India"
-            line_clean = re.sub(r"\b(?:INDIA|IND|BHARAT)\b", "", line_clean, flags=re.IGNORECASE).strip()
+        # 4. Country check (via geo_service and keywords)
+        if not contact["country"]:
+            for token in line_clean.split(","):
+                c_res = resolve_country(token)
+                if c_res:
+                    contact["country"] = c_res["name"]
+                    line_clean = re.sub(r"\b" + re.escape(token.strip()) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
+                    break
 
-        # 5. US City, State, ZIP patterns:
+        # 5. City, State, ZIP patterns:
         # Pattern A: Standard spaced e.g. "Salt Lake City, UT 11212" or "HOUSTON TX 77024-7134"
-        m_csz = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Za-z]{2})\s+([0-9]{5}(?:-[0-9]{4})?)$", line_clean)
-        if m_csz and m_csz.group(2).upper() in US_STATES:
-            contact["city"] = _clean_spaces(m_csz.group(1).strip()).title()
-            contact["state"] = US_STATES[m_csz.group(2).upper()]
-            contact["postal_code"] = m_csz.group(3).strip()
-            if not contact["country"]:
-                contact["country"] = "United States"
-            idx += 1
-            continue
+        m_csz = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Za-z]{2,3})\s+([0-9A-Za-z]{3,10}(?:-[0-9]{4})?)$", line_clean)
+        if m_csz:
+            st_cand = m_csz.group(2).upper()
+            st_info = resolve_state(st_cand, contact.get("country"))
+            if st_info:
+                contact["city"] = _clean_spaces(m_csz.group(1).strip()).title()
+                contact["state"] = st_info["state_name"]
+                contact["postal_code"] = m_csz.group(3).strip()
+                if not contact["country"]:
+                    contact["country"] = st_info["country_name"]
+                idx += 1
+                continue
 
         # Pattern B: Joined unspaced e.g. "HOUSTONTX77024-7134" or "HOUSTONTX77024"
         m_csz_joined = re.search(r"^([A-Za-z]{3,})([A-Za-z]{2})([0-9]{5}(?:-[0-9]{4})?)$", line_clean)
-        if m_csz_joined and m_csz_joined.group(2).upper() in US_STATES:
-            contact["city"] = _clean_spaces(m_csz_joined.group(1).strip()).title()
-            contact["state"] = US_STATES[m_csz_joined.group(2).upper()]
-            contact["postal_code"] = m_csz_joined.group(3).strip()
-            if not contact["country"]:
-                contact["country"] = "United States"
-            idx += 1
-            continue
+        if m_csz_joined:
+            st_cand = m_csz_joined.group(2).upper()
+            st_info = resolve_state(st_cand, contact.get("country"))
+            if st_info:
+                contact["city"] = _clean_spaces(m_csz_joined.group(1).strip()).title()
+                contact["state"] = st_info["state_name"]
+                contact["postal_code"] = m_csz_joined.group(3).strip()
+                if not contact["country"]:
+                    contact["country"] = st_info["country_name"]
+                idx += 1
+                continue
 
         # Pattern C: City, State on current line, ZIP on next line
-        # e.g. Current line: "Salt Lake City, UT" or "Salt Lake City UT", Next line: "11212" or "11212-1234"
-        m_cs = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Za-z]{2})$", line_clean)
-        if m_cs and m_cs.group(2).upper() in US_STATES:
-            contact["city"] = _clean_spaces(m_cs.group(1).strip()).title()
-            contact["state"] = US_STATES[m_cs.group(2).upper()]
-            if not contact["country"]:
-                contact["country"] = "United States"
-            if idx + 1 < len(cleaned_lines):
-                next_l = cleaned_lines[idx + 1].strip()
-                if re.match(r"^\d{5}(?:-\d{4})?$", next_l):
-                    contact["postal_code"] = next_l
-                    idx += 2
-                    continue
-            idx += 1
-            continue
+        m_cs = re.search(r"^([A-Za-z\s\.\-]+?)[,\s]+([A-Za-z]{2,3})$", line_clean)
+        if m_cs:
+            st_cand = m_cs.group(2).upper()
+            st_info = resolve_state(st_cand, contact.get("country"))
+            if st_info:
+                contact["city"] = _clean_spaces(m_cs.group(1).strip()).title()
+                contact["state"] = st_info["state_name"]
+                if not contact["country"]:
+                    contact["country"] = st_info["country_name"]
+                if idx + 1 < len(cleaned_lines):
+                    next_l = cleaned_lines[idx + 1].strip()
+                    if re.match(r"^\d{5,6}(?:-\d{4})?$", next_l):
+                        contact["postal_code"] = next_l
+                        idx += 2
+                        continue
+                idx += 1
+                continue
 
         # 6. Postal / PIN Code check
         if not contact["postal_code"]:
@@ -342,24 +448,34 @@ def _parse_address_block(lines: List[str], is_sender: bool = False) -> Dict[str,
                 contact["postal_code"] = m_pin.group(1)
                 line_clean = re.sub(r"(?:PIN|PINCODE|PIN\s*CODE|ZIP|POSTAL)?\s*[:\-]?\s*" + re.escape(m_pin.group(1)), "", line_clean, flags=re.IGNORECASE).strip()
 
-        # 7. Indian State check
+        # 7. State resolution check (Full state name or abbreviation)
         if not contact["state"]:
-            upper_line = line_clean.upper()
-            for st in INDIAN_STATES:
-                if re.search(r"\b" + re.escape(st) + r"\b", upper_line):
-                    contact["state"] = st.title()
-                    if not contact["country"]:
-                        contact["country"] = "India"
-                    line_clean = re.sub(r"\b" + re.escape(st) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
-                    break
-            if not contact["state"]:
-                for abbr, full_state in STATE_ABBRS.items():
-                    if re.search(r"(?:,\s*|\b)" + re.escape(abbr) + r"\b", upper_line):
-                        contact["state"] = full_state
+            st_info = resolve_state(line_clean, contact.get("country"))
+            if st_info:
+                contact["state"] = st_info["state_name"]
+                if not contact["country"]:
+                    contact["country"] = st_info["country_name"]
+                line_clean = re.sub(r"\b" + re.escape(st_info["state_name"]) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
+                if st_info.get("state_code"):
+                    line_clean = re.sub(r"\b" + re.escape(st_info["state_code"]) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
+                line_clean = re.sub(r"^[,\s\-]+|[,\s\-]+$", "", line_clean).strip()
+            else:
+                upper_line = line_clean.upper()
+                for st in INDIAN_STATES:
+                    if re.search(r"\b" + re.escape(st) + r"\b", upper_line):
+                        contact["state"] = st.title()
                         if not contact["country"]:
                             contact["country"] = "India"
-                        line_clean = re.sub(r"(?:,\s*|\b)" + re.escape(abbr) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
+                        line_clean = re.sub(r"\b" + re.escape(st) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
                         break
+                if not contact["state"]:
+                    for abbr, full_state in STATE_ABBRS.items():
+                        if re.search(r"(?:,\s*|\b)" + re.escape(abbr) + r"\b", upper_line):
+                            contact["state"] = full_state
+                            if not contact["country"]:
+                                contact["country"] = "India"
+                            line_clean = re.sub(r"(?:,\s*|\b)" + re.escape(abbr) + r"\b", "", line_clean, flags=re.IGNORECASE).strip()
+                            break
 
         cleaned_str = _clean_spaces(line_clean)
         cleaned_str = re.sub(r"^[,\s\-]+|[,\s\-]+$", "", cleaned_str).strip()
@@ -727,10 +843,8 @@ def extract_shipping_label_data(
         if not order_info.awb_number:
             order_info.awb_number = permit_match.group(1).strip()
 
-    # Shipping Date
-    date_match = re.search(r"\b(?:DATE|SHIP\s*DATE|SHIPPING\s*DATE|DISPATCH\s*DATE)?\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}|\d{4}[\-\/\.]\d{2}[\-\/\.]\d{2})\b", raw_text, re.IGNORECASE)
-    if date_match and date_match.group(1):
-        order_info.shipping_date = date_match.group(1).strip()
+    # Shipping Date (supports text months, standard ISO, and localized slashes/dashes)
+    order_info.shipping_date = extract_shipping_date(raw_text)
 
     # Payment Type
     if re.search(r"\b(?:COD|CASH\s*ON\s*DELIVERY)\b", raw_text, re.IGNORECASE):
@@ -1106,7 +1220,7 @@ Return only valid JSON adhering strictly to the schema."""
                 order_id=ord_data.get("order_id") or heuristic_res.order.order_id,
                 tracking_number=ord_data.get("tracking_number") or heuristic_res.order.tracking_number,
                 awb_number=ord_data.get("awb_number") or heuristic_res.order.awb_number,
-                shipping_date=ord_data.get("shipping_date") or heuristic_res.order.shipping_date,
+                shipping_date=normalize_shipping_date(ord_data.get("shipping_date")) or heuristic_res.order.shipping_date,
                 payment_type=ord_data.get("payment_type") or heuristic_res.order.payment_type,
                 remarks=ord_data.get("remarks") or heuristic_res.order.remarks
             )

@@ -432,6 +432,52 @@ def test_barcode_qr_and_cross_validation():
     print("  [PASS] QR/Barcode Detection, Classification & OCR Cross-Validation tests passed.")
 
 
+def test_shipping_date_and_geo_service():
+    print("Testing Global Geo Service & Shipping Date Normalization...")
+    from geo_service import resolve_country, resolve_state
+    from shipping_extractor import normalize_shipping_date, extract_shipping_date
+
+    # 1. Test Country Resolution from CSV database
+    c_us = resolve_country("USA")
+    assert c_us is not None and c_us["name"] == "United States" and c_us["iso2"] == "US"
+    c_in = resolve_country("IND")
+    assert c_in is not None and c_in["name"] == "India" and c_in["iso2"] == "IN"
+    c_ca = resolve_country("Canada")
+    assert c_ca is not None and c_ca["iso2"] == "CA"
+    c_au = resolve_country("AU")
+    assert c_au is not None and c_au["name"] == "Australia"
+
+    # 2. Test State / Province Resolution from CSV database
+    st_tx = resolve_state("TX", "US")
+    assert st_tx is not None and st_tx["state_name"] == "Texas" and st_tx["country_name"] == "United States"
+    st_ka = resolve_state("KA", "IN")
+    assert st_ka is not None and st_ka["state_name"] == "Karnataka"
+    st_nsw = resolve_state("NSW", "AU")
+    assert st_nsw is not None and st_nsw["state_name"] == "New South Wales"
+    st_on = resolve_state("ON", "CA")
+    assert st_on is not None and st_on["state_name"] == "Ontario"
+
+    # 3. Test Shipping Date Normalization
+    assert normalize_shipping_date("05 Oct 2026") == "2026-10-05"
+    assert normalize_shipping_date("15-August-2024") == "2024-08-15"
+    assert normalize_shipping_date("Oct 05, 2026") == "2026-10-05"
+    assert normalize_shipping_date("24-FEB-25") == "2025-02-24"
+    assert normalize_shipping_date("2024-12-31") == "2024-12-31"
+    assert normalize_shipping_date("15/08/2024") == "2024-08-15"
+
+    # 4. Test Shipping Date OCR Extraction
+    ocr_sample1 = "SHIP DATE: 05 Oct 2026\nFROM: John\nTO: Smith"
+    assert extract_shipping_date(ocr_sample1) == "2026-10-05"
+
+    ocr_sample2 = "Dispatched on: 12-Nov-2024\nWeight: 2.5 KG"
+    assert extract_shipping_date(ocr_sample2) == "2024-11-12"
+
+    ocr_sample3 = "Mailed from ZIP 11212\nDate: 2024-09-20"
+    assert extract_shipping_date(ocr_sample3) == "2024-09-20"
+
+    print("  [PASS] Global Geo Service & Shipping Date Normalization tests passed.")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("RUNNING UTILITY BOT ENTERPRISE TEST SUITE")
@@ -448,7 +494,8 @@ if __name__ == "__main__":
     test_crosscheck_service()
     test_shipping_label_extraction()
     test_barcode_qr_and_cross_validation()
+    test_shipping_date_and_geo_service()
     print("=" * 60)
-    print("ALL 12 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
+    print("ALL 13 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
     print("=" * 60)
 
