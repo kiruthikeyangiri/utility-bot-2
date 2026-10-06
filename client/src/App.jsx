@@ -344,7 +344,7 @@ export default function App() {
                   <Bot className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold">Utility Bot</h3>
+                  <h3 className="text-base font-bold">Utility</h3>
                   <p className="text-xs text-white/80">Version 2.5.0 Enterprise</p>
                 </div>
               </div>

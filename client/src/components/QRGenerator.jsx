@@ -520,7 +520,7 @@ export default function QRGenerator() {
                     type="url"
                     value={shippingFields.tracking_url}
                     onChange={(e) => setShippingFields({ ...shippingFields, tracking_url: e.target.value })}
-                    placeholder="https://utilitybot.com/shipping/SHIP-10025"
+                    placeholder="https://utility.com/shipping/SHIP-10025"
                     className="w-full px-3.5 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono text-slate-800"
                   />
                 </div>

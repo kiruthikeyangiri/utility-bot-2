@@ -67,7 +67,7 @@ export default function Navbar({ onToggleSidebar, onToggleHistory, isConnected, 
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="text-base font-bold text-slate-900 tracking-tight group-hover:text-indigo-600 transition-colors">
-                  Utility Bot
+                  Utility
                 </h1>
                 <span className={`text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full border ${pageInfo.badgeColor}`}>
                   {pageInfo.badge}

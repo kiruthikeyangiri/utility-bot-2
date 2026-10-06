@@ -141,7 +141,7 @@ export default function Sidebar({
               <Bot className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 leading-tight">Utility Bot</h2>
+              <h2 className="text-base font-bold text-slate-900 leading-tight">Utility</h2>
               <p className="text-xs text-slate-500">Document & Label Suite</p>
             </div>
           </div>

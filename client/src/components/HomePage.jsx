@@ -84,10 +84,7 @@ export default function HomePage({ onNavigate }) {
     <div className="space-y-10 py-4 animate-in fade-in duration-300">
       
       {/* Hero Section */}
-      <div className="text-center space-y-3 max-w-3xl mx-auto pt-2">
-        <div className="inline-flex items-center px-4 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-semibold shadow-xs">
-          <span>Utility Bot 2.0 - AI-Powered Document and Vision Suite</span>
-        </div>
+      <div className="text-center space-y-2 max-w-3xl mx-auto pt-2">
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
           Select a Tool to Begin
         </h1>
@@ -157,62 +154,6 @@ export default function HomePage({ onNavigate }) {
             </div>
           );
         })}
-      </div>
-
-      {/* Capabilities & Specifications Footer Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-lg space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
-          <div>
-            <h3 className="text-base font-bold tracking-tight">Enterprise Infrastructure & Pipeline Highlights</h3>
-            <p className="text-xs text-slate-400 mt-1">Multi-modal AI pipeline optimized for zero data leakages and rapid processing</p>
-          </div>
-          <div className="flex items-center space-x-2 text-xs font-semibold px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur border border-white/10">
-            <Shield className="w-3.5 h-3.5 text-emerald-400" />
-            <span>30-Day Auto Retention Active</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 text-xs">
-          <div className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/5">
-            <div className="flex items-center space-x-2 text-sky-400 font-semibold">
-              <Cpu className="w-4 h-4" />
-              <span>Vision OCR Engine</span>
-            </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              RapidOCR on ONNX runtime with automated image thresholding and deskew.
-            </p>
-          </div>
-
-          <div className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/5">
-            <div className="flex items-center space-x-2 text-emerald-400 font-semibold">
-              <Zap className="w-4 h-4" />
-              <span>Barcode Matrix</span>
-            </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              12 multi-pass filters with ZXing-CPP engine & fallback OpenCV detection.
-            </p>
-          </div>
-
-          <div className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/5">
-            <div className="flex items-center space-x-2 text-violet-400 font-semibold">
-              <Layers className="w-4 h-4" />
-              <span>Multi-Source Match</span>
-            </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              Deterministic cross-checking between OCR text and decoded barcode data.
-            </p>
-          </div>
-
-          <div className="space-y-1.5 p-3 rounded-2xl bg-white/5 border border-white/5">
-            <div className="flex items-center space-x-2 text-amber-400 font-semibold">
-              <FileText className="w-4 h-4" />
-              <span>Structured Export</span>
-            </div>
-            <p className="text-slate-300 text-[11px] leading-relaxed">
-              Real-time JSON schema formatting, PNG/SVG QR export and applicant tracking.
-            </p>
-          </div>
-        </div>
       </div>
 
     </div>
