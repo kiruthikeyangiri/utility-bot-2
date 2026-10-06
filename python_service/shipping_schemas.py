@@ -56,6 +56,7 @@ class CodeItem(BaseModel):
     format: str
     value: str
     content_type: Optional[str] = None
+    position: Optional[List[Dict[str, int]]] = None
 
 
 class ShippingLabelResult(BaseModel):

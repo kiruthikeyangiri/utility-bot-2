@@ -474,8 +474,8 @@ export default function QRScanner() {
                         <Eye className="w-3.5 h-3.5 text-sky-600" />
                         <span>Visual Detection &amp; Bounding Boxes:</span>
                       </span>
-                      <span className="text-[11px] text-slate-400 font-normal">
-                        Green: &gt;75% • Orange: 50–75%
+                      <span className="text-[11px] text-slate-500 font-medium">
+                        <span className="text-emerald-700">● Green: Text</span> • <span className="text-purple-700">● Purple: QR/Matrix</span> • <span className="text-amber-700">● Orange: 1D Barcode</span>
                       </span>
                     </div>
                     <div className="bg-slate-900/5 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center p-2 max-h-[340px]">

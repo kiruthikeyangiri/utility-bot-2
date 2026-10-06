@@ -782,7 +782,7 @@ async def scan_document_codes_endpoint(
     annotated_image_b64 = None
     try:
         ocr_res = extract_ocr_data(cv2_img, min_confidence=min_confidence)
-        annotated_cv2 = draw_bounding_boxes(cv2_img, ocr_res, show_confidence=True)
+        annotated_cv2 = draw_bounding_boxes(cv2_img, ocr_res, show_confidence=True, codes=codes_dict)
         annotated_image_b64 = cv2_to_base64(annotated_cv2)
         ocr_data = {
             "raw_text": ocr_res.raw_text,

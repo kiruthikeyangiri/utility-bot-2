@@ -158,44 +158,117 @@ def extract_ocr_data(
 
 def draw_bounding_boxes(
     image: np.ndarray,
-    ocr_result: OCRResult,
-    show_confidence: bool = True
+    ocr_result: Optional[OCRResult] = None,
+    show_confidence: bool = True,
+    codes: Optional[Dict[str, List[Any]]] = None
 ) -> np.ndarray:
-    """Draws color-coded bounding boxes and confidence tags around detected text."""
+    """
+    Draws color-coded bounding boxes and badges for OCR text, 2D QR/Matrix codes, and 1D Barcodes.
+    - OCR Words: Green (>75%), Orange (50-75%), Yellow (<50%) + confidence badge
+    - 2D QR / Data Matrix Codes: Vibrant Magenta/Purple (200, 30, 200) + format badge
+    - 1D Linear Barcodes: Vibrant Azure/Orange (255, 140, 0) + format badge
+    """
     annotated = image.copy()
     if len(annotated.shape) == 2:
         annotated = cv2.cvtColor(annotated, cv2.COLOR_GRAY2BGR)
 
-    for word in ocr_result.words:
-        x, y, w, h = word.x, word.y, word.width, word.height
+    # 1. Draw OCR Words
+    if ocr_result and hasattr(ocr_result, "words"):
+        for word in ocr_result.words:
+            x, y, w, h = word.x, word.y, word.width, word.height
 
-        # Color coding: Green if confidence > 75, Orange if 50-75, Yellow if < 50
-        if word.confidence >= 75:
-            current_box_color = (0, 200, 0)
-        elif word.confidence >= 50:
-            current_box_color = (0, 165, 255)
-        else:
-            current_box_color = (0, 255, 255)
+            # Color coding: Green if confidence > 75, Orange if 50-75, Yellow if < 50
+            if word.confidence >= 75:
+                current_box_color = (0, 200, 0)
+            elif word.confidence >= 50:
+                current_box_color = (0, 165, 255)
+            else:
+                current_box_color = (0, 255, 255)
 
-        # Draw bounding rectangle
-        cv2.rectangle(annotated, (x, y), (x + w, y + h), current_box_color, 2)
+            # Draw bounding rectangle
+            cv2.rectangle(annotated, (x, y), (x + w, y + h), current_box_color, 2)
 
-        # Draw small confidence score above box if requested
-        if show_confidence:
-            label = f"{int(word.confidence)}%"
-            font_scale = 0.4
-            thickness = 1
-            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
-            cv2.rectangle(annotated, (x, max(0, y - th - 4)), (x + tw + 2, max(th + 4, y)), current_box_color, -1)
-            cv2.putText(
-                annotated,
-                label,
-                (x + 1, max(th, y - 2)),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                font_scale,
-                (0, 0, 0),
-                thickness,
-                cv2.LINE_AA
-            )
+            # Draw small confidence score above box if requested
+            if show_confidence:
+                label = f"{int(word.confidence)}%"
+                font_scale = 0.4
+                thickness = 1
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+                cv2.rectangle(annotated, (x, max(0, y - th - 4)), (x + tw + 2, max(th + 4, y)), current_box_color, -1)
+                cv2.putText(
+                    annotated,
+                    label,
+                    (x + 1, max(th, y - 2)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale,
+                    (0, 0, 0),
+                    thickness,
+                    cv2.LINE_AA
+                )
+
+    # 2. Draw Optical Barcodes & QR Codes
+    if codes:
+        # 2a. Barcodes (1D)
+        barcodes = codes.get("barcodes", [])
+        for bar in barcodes:
+            pos = bar.get("position") if isinstance(bar, dict) else getattr(bar, "position", None)
+            fmt = bar.get("format", "Barcode") if isinstance(bar, dict) else getattr(bar, "format", "Barcode")
+            val = bar.get("value", "") if isinstance(bar, dict) else getattr(bar, "value", "")
+            if pos and len(pos) >= 4:
+                pts = np.array([[p["x"], p["y"]] if isinstance(p, dict) else [p.x, p.y] for p in pos], np.int32)
+                pts = pts.reshape((-1, 1, 2))
+                bar_color = (255, 140, 0)  # Bright Azure/Orange in BGR
+                cv2.polylines(annotated, [pts], isClosed=True, color=bar_color, thickness=3)
+
+                # Draw Badge on top-left
+                min_x = int(np.min(pts[:, 0, 0]))
+                min_y = int(np.min(pts[:, 0, 1]))
+                val_snip = val[:16] + "..." if len(val) > 16 else val
+                label = f"[1D: {fmt}] {val_snip}" if val_snip else f"[1D: {fmt}]"
+                font_scale = 0.45
+                thickness = 1
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+                cv2.rectangle(annotated, (min_x, max(0, min_y - th - 6)), (min_x + tw + 6, max(th + 6, min_y)), bar_color, -1)
+                cv2.putText(
+                    annotated,
+                    label,
+                    (min_x + 3, max(th + 1, min_y - 3)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale,
+                    (255, 255, 255),
+                    thickness,
+                    cv2.LINE_AA
+                )
+
+        # 2b. 2D QR / Data Matrix Codes
+        qr_codes = codes.get("qr_codes", [])
+        for qr in qr_codes:
+            pos = qr.get("position") if isinstance(qr, dict) else getattr(qr, "position", None)
+            fmt = qr.get("format", "QR") if isinstance(qr, dict) else getattr(qr, "format", "QR")
+            if pos and len(pos) >= 4:
+                pts = np.array([[p["x"], p["y"]] if isinstance(p, dict) else [p.x, p.y] for p in pos], np.int32)
+                pts = pts.reshape((-1, 1, 2))
+                qr_color = (200, 30, 200)  # Deep Vibrant Violet in BGR
+                cv2.polylines(annotated, [pts], isClosed=True, color=qr_color, thickness=3)
+
+                # Draw Badge on top-left
+                min_x = int(np.min(pts[:, 0, 0]))
+                min_y = int(np.min(pts[:, 0, 1]))
+                label = f"[QR: {fmt}]"
+                font_scale = 0.45
+                thickness = 1
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+                cv2.rectangle(annotated, (min_x, max(0, min_y - th - 6)), (min_x + tw + 6, max(th + 6, min_y)), qr_color, -1)
+                cv2.putText(
+                    annotated,
+                    label,
+                    (min_x + 3, max(th + 1, min_y - 3)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale,
+                    (255, 255, 255),
+                    thickness,
+                    cv2.LINE_AA
+                )
 
     return annotated
+
