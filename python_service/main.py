@@ -779,8 +779,11 @@ async def scan_document_codes_endpoint(
     bar_list = codes_dict.get("barcodes", [])
 
     # 2. RapidOCR Text Extraction
+    annotated_image_b64 = None
     try:
         ocr_res = extract_ocr_data(cv2_img, min_confidence=min_confidence)
+        annotated_cv2 = draw_bounding_boxes(cv2_img, ocr_res, show_confidence=True)
+        annotated_image_b64 = cv2_to_base64(annotated_cv2)
         ocr_data = {
             "raw_text": ocr_res.raw_text,
             "confidence": round(ocr_res.average_confidence, 1),
@@ -798,6 +801,7 @@ async def scan_document_codes_endpoint(
         "success": True,
         "filename": filename,
         "ocr": ocr_data,
+        "annotated_image": annotated_image_b64,
         "qr_codes": qr_list,
         "barcodes": bar_list,
         "total_detected": len(qr_list) + len(bar_list)
