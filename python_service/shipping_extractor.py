@@ -916,8 +916,8 @@ def extract_shipping_label_data(
     if order_match:
         order_info.order_id = order_match.group(1).strip()
 
-    # Tracking / AWB Number
-    tracking_match = re.search(r"\b(?:TRACKING\s*(?:NO|NUMBER|#)?|CONSIGNMENT\s*(?:NO|NUMBER)?)\s*[:\-]?\s*([A-Za-z0-9]{8,35})\b", raw_text, re.IGNORECASE)
+    # Tracking / AWB Number (handles spaced or unspaced prefixes e.g. USPSTRACKING#)
+    tracking_match = re.search(r"(?:TRACKING\s*(?:NO|NUMBER|#)?|CONSIGNMENT\s*(?:NO|NUMBER)?)\s*[:\-]?\s*([A-Za-z0-9]{8,35})\b", raw_text, re.IGNORECASE)
     if tracking_match:
         order_info.tracking_number = tracking_match.group(1).strip()
 

@@ -124,12 +124,14 @@ def _scan_opencv_qr(image: np.ndarray) -> List[Tuple[str, str]]:
 
 def extract_codes(image: np.ndarray) -> Dict[str, List[Dict[str, Any]]]:
     """
-    Multi-pass Barcode and QR code extractor with progressive enhancement:
-    - Pass 1: Original image directly via zxing-cpp
-    - Pass 2: Grayscale -> Upscale -> CLAHE -> Sharpening retry
-    - Pass 3: Otsu and Adaptive Gaussian Thresholding retry
-    - Pass 4: Multi-Angle Rotations (90°, 180°, 270°) retry
-    - Pass 5: OpenCV QRCodeDetector fallback
+    High-Precision Multi-Pass Barcode and QR code extractor.
+    Scans for ALL codes present on single or multi-code shipping documents:
+    - Pass 1: Native image scan via zxing-cpp
+    - Pass 2: Multi-Scale Full Image Scans (1.5x, 2.0x upscale for fine 1D bars)
+    - Pass 3: Regional Band Scans (Top 60%, Bottom 60%, Upscaled lower tracking zone)
+    - Pass 4: Grayscale -> CLAHE -> Sharpening & Otsu Binarization
+    - Pass 5: Multi-Angle Rotations (90°, 180°, 270°)
+    - Pass 6: OpenCV QRCodeDetector Fallback
     
     Returns separate arrays for 'barcodes' and 'qr_codes', deduplicated by (format, value).
     """
@@ -149,78 +151,90 @@ def extract_codes(image: np.ndarray) -> Dict[str, List[Dict[str, Any]]]:
                 seen_keys.add(key)
                 raw_results.append((fmt, clean_val))
 
+    h, w = image.shape[:2]
+
     # =========================================================================
-    # PASS 1: Native image scan
+    # PASS 1: Native full image scan
     # =========================================================================
     record_codes(_scan_zxing(image))
 
-    # Prepare grayscale base for Passes 2-4
-    if len(image.shape) == 3:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        gray = image.copy()
-
     # =========================================================================
-    # PASS 2: Grayscale -> Upscale -> CLAHE -> Sharpen retry
+    # PASS 2: Multi-Scale Upscaling (1.5x & 2.0x) - Crucial for fine 1D bars
     # =========================================================================
-    if len(raw_results) == 0:
+    for scale in [1.5, 2.0]:
         try:
-            h, w = gray.shape[:2]
-            upscaled = cv2.resize(gray, (int(w * 1.5), int(h * 1.5)), interpolation=cv2.INTER_CUBIC)
-
-            # CLAHE (Contrast Limited Adaptive Histogram Equalization)
-            clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
-            clahe_img = clahe.apply(upscaled)
-
-            # Sharpening kernel
-            kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-            sharpened = cv2.filter2D(clahe_img, -1, kernel)
-
-            record_codes(_scan_zxing(sharpened))
-            if len(raw_results) == 0:
-                record_codes(_scan_zxing(clahe_img))
+            upscaled = cv2.resize(image, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+            record_codes(_scan_zxing(upscaled))
         except Exception:
             pass
 
     # =========================================================================
-    # PASS 3: Threshold Processing (Otsu & Adaptive Gaussian)
+    # PASS 3: Regional Band Scans (Top band, Bottom band, Upscaled bottom band)
     # =========================================================================
-    if len(raw_results) == 0:
-        try:
-            # Otsu Thresholding
-            _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            record_codes(_scan_zxing(otsu))
+    try:
+        # Top 60% (Postage stamps, top 2D DataMatrix/QR codes)
+        top_band = image[:int(h * 0.6), :]
+        record_codes(_scan_zxing(top_band))
 
-            # Adaptive Gaussian Thresholding
-            if len(raw_results) == 0:
-                adaptive = cv2.adaptiveThreshold(
-                    gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 5
-                )
-                record_codes(_scan_zxing(adaptive))
-        except Exception:
-            pass
+        # Bottom 60% (Shipping tracking 1D barcodes)
+        bottom_band = image[int(h * 0.45):, :]
+        record_codes(_scan_zxing(bottom_band))
+
+        # Upscaled bottom band
+        bh, bw = bottom_band.shape[:2]
+        b_upscaled = cv2.resize(bottom_band, (int(bw * 1.5), int(bh * 1.5)), interpolation=cv2.INTER_CUBIC)
+        record_codes(_scan_zxing(b_upscaled))
+    except Exception:
+        pass
 
     # =========================================================================
-    # PASS 4: Rotation Detection (90°, 180°, 270°)
+    # PASS 4: Grayscale + CLAHE + Sharpening + Thresholding
+    # =========================================================================
+    try:
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image.copy()
+
+        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        clahe_img = clahe.apply(gray)
+        record_codes(_scan_zxing(clahe_img))
+
+        # Sharpening kernel
+        kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+        sharpened = cv2.filter2D(clahe_img, -1, kernel)
+        record_codes(_scan_zxing(sharpened))
+
+        # Otsu thresholding
+        _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        record_codes(_scan_zxing(otsu))
+
+        # Adaptive Gaussian Thresholding
+        adaptive = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 5
+        )
+        record_codes(_scan_zxing(adaptive))
+    except Exception:
+        pass
+
+    # =========================================================================
+    # PASS 5: Multi-Angle Rotations (90°, 180°, 270°)
     # =========================================================================
     if len(raw_results) == 0:
         try:
             for rot_code in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]:
                 rotated = cv2.rotate(image, rot_code)
                 record_codes(_scan_zxing(rotated))
-                if len(raw_results) > 0:
-                    break
         except Exception:
             pass
 
     # =========================================================================
-    # PASS 5: OpenCV QRCodeDetector Fallback
+    # PASS 6: OpenCV QRCodeDetector Fallback
     # =========================================================================
     has_qr = any(_is_qr_or_matrix_format(fmt) for fmt, _ in raw_results)
     if not has_qr:
         record_codes(_scan_opencv_qr(image))
         if not any(_is_qr_or_matrix_format(fmt) for fmt, _ in raw_results):
-            # Try OpenCV on rotated angles
             for rot_code in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_180, cv2.ROTATE_90_COUNTERCLOCKWISE]:
                 rotated = cv2.rotate(image, rot_code)
                 record_codes(_scan_opencv_qr(rotated))
