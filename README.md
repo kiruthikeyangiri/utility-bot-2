@@ -10,10 +10,11 @@
 [![MongoDB Atlas](https://img.shields.io/badge/Database-MongoDB_Atlas_Cloud-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com)
 [![Compliance](https://img.shields.io/badge/Privacy-DPDP_%26_UIDAI_Compliant-success.svg)](#-data-privacy--enterprise-security)
 
-**Utility Bot** is an enterprise-grade AI automation suite providing three production workflows in a single unified system:
-1. **🆔 Government ID Card Verification & Biometric KYC**: Instant classification, portrait extraction, Aadhaar masking, SFace 128-D biometric face matching, anti-spoofing liveness, dual-ID cross-verification, and cryptographically verified Identity Reference Cards.
-2. **📦 Shipping Label Scanner & Logistics Extraction**: Multi-image batch processing (1–3 parcel labels simultaneously), multi-pass Barcode & QR matrix decoding (`zxing-cpp`), spatial 2-column layout reconstruction, deterministic multi-source tracking cross-check, and intelligent extraction of **SHIP TO**, **SHIP FROM**, **ORDER**, **PACKAGE**, and **ITEMS / PRODUCT MANIFEST**.
-3. **🔲 QR & Barcode Tools Suite**: Standalone QR Code Generator across 12 standard payload types with automated local verification, standalone multi-format Barcode/QR scanner, and combined document OCR + optical code extractor.
+**Utility Bot 2.0** is an enterprise-grade AI automation suite providing three production workflows in a single unified system:
+1. **🏠 Unified Home Dashboard**: Interactive tool selector providing instant access to ID Verification, Shipping Label Scanner, and QR & Barcode Tools.
+2. **🆔 Government ID Card Verification & Biometric KYC**: Instant classification, portrait extraction, Aadhaar masking, SFace 128-D biometric face matching, anti-spoofing liveness, dual-ID cross-verification, and cryptographically verified Identity Reference Cards.
+3. **📦 Shipping Label Scanner & Logistics Extraction**: Multi-image batch processing (1–10 parcel labels per batch simultaneously), multi-pass Barcode & QR matrix decoding (`zxing-cpp`), spatial 2-column layout reconstruction, deterministic multi-source tracking cross-check, and intelligent extraction of **SHIP TO**, **SHIP FROM**, **ORDER**, **PACKAGE**, and **ITEMS / PRODUCT MANIFEST**.
+4. **🔲 QR & Barcode Tools Suite**: Standalone QR Code Generator across 12 standard payload types with automated local verification, standalone multi-format Barcode/QR scanner, and combined document OCR + optical code extractor.
 
 ---
 
@@ -177,18 +178,19 @@ flowchart TD
 
 ---
 
-### workflow 2: Shipping Label Scanner & Logistics Intelligence
+### 📦 Workflow 2: Shipping Label Scanner & Logistics Intelligence
 
 ```
-[1 to 3 Shipping Label Images] (JPG, JPEG, PNG)
+[1 to 10 Shipping Label Images] (JPG, JPEG, PNG)
          │
          ├───> [Image 1] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Cross-Validation & Geo Match] ───> [Result Card #1]
          ├───> [Image 2] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Cross-Validation & Geo Match] ───> [Result Card #2]
-         └───> [Image 3] ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Cross-Validation & Geo Match] ───> [Result Card #3]
+         ├───> [...]     ───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Cross-Validation & Geo Match] ───> [Result Card ...]
+         └───> [Image 10]───> [Parallel ZXing-CPP + RapidOCR] ───> [Spatial 2-Column Sorter] ───> [Cross-Validation & Geo Match] ───> [Result Card #10]
 ```
 
-1. **Multi-Image Upload (Max 3 Images)**:
-   - Operators can upload **1, 2, or 3 images simultaneously** (JPG, JPEG, PNG).
+1. **Multi-Image Batch Upload (1 to 10 Images per Batch)**:
+   - Operators can upload **1, 2, or up to 10 images simultaneously** (JPG, JPEG, PNG).
    - Each image is executed **strictly independently** through the extraction pipeline without data cross-contamination.
 2. **Multi-Pass Barcode & QR Code Engine (`code_reader.py`)**:
    - **Pass 1:** Native high-speed `zxing-cpp` scan across 1D/2D symbologies (Code 128, Code 39, EAN-13, EAN-8, UPC-A, UPC-E, ITF, QR Code, Data Matrix, Aztec, PDF417).
@@ -423,7 +425,7 @@ docker run -p 8000:8000 utility-bot
 
 ## 🧪 Automated Verification Suite
 
-Run the comprehensive 13-module automated test suite covering all regex heuristics, validation rules, SFace biometrics, cross-checks, multi-pass barcode/QR decoding, global geo resolution, and shipping date normalization:
+Run the comprehensive 14-module automated test suite covering all regex heuristics, validation rules, SFace biometrics, cross-checks, multi-pass barcode/QR decoding, global geo resolution, QR generator validation, and shipping date normalization:
 
 ```powershell
 python python_service/test_pipeline.py
@@ -459,8 +461,10 @@ Testing QR/Barcode Multi-Pass Detection, Classification & OCR Cross-Validation..
   [PASS] QR/Barcode Detection, Classification & OCR Cross-Validation tests passed.
 Testing Global Geo Service & Shipping Date Normalization...
   [PASS] Global Geo Service & Shipping Date Normalization tests passed.
+Testing QR Code Generator (12 Types), Capacity Limits & Auto-Verification...
+  [PASS] QR Code Generator, Capacity Limits & Standalone Scanner tests passed.
 ============================================================
-ALL 13 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]
+ALL 14 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]
 ============================================================
 ```
 
@@ -478,7 +482,7 @@ ALL 13 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]
 ### **2. Shipping Label & Logistics Scanner**
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/extract-shipping` | Upload 1 to 3 shipping labels (`files: List[UploadFile]`). Runs parallel multi-pass ZXing-CPP Barcode/QR decoding, RapidOCR, 2-column spatial reconstruction, deterministic multi-source tracking cross-check, and LLM/heuristic extraction. Returns separate JSON result per image. |
+| `POST` | `/extract-shipping` | Upload 1 to 10 shipping labels (`files: List[UploadFile]`). Runs parallel multi-pass ZXing-CPP Barcode/QR decoding, RapidOCR, 2-column spatial reconstruction, deterministic multi-source tracking cross-check, and LLM/heuristic extraction. Returns separate JSON result per image. |
 
 ### **3. Document Extraction & Confirmation**
 | Method | Endpoint | Description |
