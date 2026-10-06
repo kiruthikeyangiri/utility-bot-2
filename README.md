@@ -179,13 +179,91 @@ flowchart TD
    - Detects side-by-side / two-column layouts (Destination block on left, Return/Shipper block on right).
    - Re-orders the reading stream column-by-column, completely eliminating horizontal text concatenation bugs.
 7. **Intelligent Field Extraction & Post-Processing**:
-   - **SHIP TO (Receiver):** Name, Phone, Email, Address, City, State, Postal Code, Country.
+   - **SHIP TO (Receiver):** Name, Phone, Email, Address, City, State, Postal Code, Country (with automatic metro city resolution from PIN/ZIP codes like `560043` $\to$ Bangalore).
    - **SHIP FROM (Sender):** Name, Company, Phone, Email, Address, City, State, Postal Code, Country.
    - **ORDER & TRACKING:** Order ID, Tracking Number, AWB Number, Shipping Date, Payment Type (`COD` / `PREPAID`), Remarks.
    - **PACKAGE INFORMATION:** Weight (e.g. `5oz`, `1.5 KG`) and Dimensions.
    - **PRODUCT ITEMS MANIFEST:** Product name, quantity, unit price, currency, and total amount.
-8. **Multi-Card Interactive UI**:
-   - Displays dedicated result cards per uploaded label with **Details** (with verification badges), **OCR Text**, **Barcode / QR** (with content type tags), and **JSON Payload** tabs.
+8. **Multi-Card Interactive UI & Symbology Guide**:
+   - **In-Card Optical Breakdown:** Displays detected barcode/QR format, standard full form, decoded value, and practical logistics use case directly on the primary **Details** tab.
+   - **Format & Symbology Guide:** Interactive reference panel with live search and category filters across all 17 supported 1D and 2D optical symbologies.
+
+---
+
+### 📊 Supported Barcode & 2D Matrix Symbologies (17 Formats)
+
+| Type | Full Form | Category | What It Is Used For |
+| :--- | :--- | :--- | :--- |
+| **Code 128** | Code 128 | 1D Linear Barcode | Shipping labels, courier tracking, warehouse labels, logistics |
+| **Code 39** | Code 39 (3 of 9) | 1D Linear Barcode | Automotive, manufacturing, inventory, industrial labels |
+| **EAN-13** | European Article Number – 13 digit | 1D Linear Barcode | Retail product barcodes, supermarkets, consumer packaging |
+| **EAN-8** | European Article Number – 8 digit | 1D Linear Barcode | Small retail products with limited label space |
+| **UPC-A** | Universal Product Code – Version A | 1D Linear Barcode | Retail products, mainly US & Canada retail supply chains |
+| **UPC-E** | Universal Product Code – Version E | 1D Linear Barcode | Small packages where standard UPC-A is too large |
+| **ITF** | Interleaved Two of Five | 1D Linear Barcode | Cartons, warehouse boxes, logistics & corrugated cardboard |
+| **ITF-14** | Interleaved Two of Five – 14 digit | 1D Linear Barcode | Shipping master cartons and product cases in wholesale |
+| **Codabar** | Codabar Barcode | 1D Linear Barcode | Libraries, blood banks, older logistics systems, parcel tracking |
+| **GS1-128** | GS1 Code 128 | 1D Linear Barcode | Shipping, supply chain, batch numbers, expiry dates, serials |
+| **PDF417** | Portable Data File 417 | 2D Stacked Barcode | Driving licences, IDs, transport documents, boarding passes |
+| **Data Matrix** | Data Matrix 2D Code | 2D Matrix Code | Electronics, medicine, manufacturing, small components |
+| **QR Code** | Quick Response Code | 2D Matrix Code | URLs, payments, tracking links, IDs, product authentication |
+| **Micro QR** | Micro Quick Response Code | 2D Matrix Code | Very small labels with limited space (single position pattern) |
+| **Aztec Code** | Aztec Code | 2D Matrix Code | Flight tickets, train tickets, mobile electronic boarding passes |
+| **MaxiCode** | MaxiCode | 2D Matrix Code | High-speed parcel sorting and shipping (UPS & conveyor systems) |
+| **GS1 DataMatrix** | GS1 Data Matrix | 2D Matrix Code | Healthcare, medicines, serial numbers, expiry and batch data |
+
+---
+
+### 🔲 QR Code Generation & Internal Architecture
+
+QR codes convert text, tracking URLs, or JSON manifests into a 2D matrix of black and white square modules through a 5-stage pipeline:
+
+```mermaid
+flowchart LR
+    A["Raw Data (URL / AWB / JSON)"] --> B["Mode Encoding (Numeric/Byte)"]
+    B --> C["Reed-Solomon ECC (L, M, Q, H)"]
+    C --> D["Pattern Placement (Finder/Timing)"]
+    D --> E["Masking (XOR 0-7)"]
+    E --> F["Rendered Matrix (PNG/SVG)"]
+```
+
+#### 1. Reed-Solomon Error Correction Levels
+- **Level L (7%):** High density, minimal redundancy (used when label real estate is constrained).
+- **Level M (15%):** Standard default for shipping and logistics manifests.
+- **Level Q (25%):** High reliability for rough transit handling and scratched thermal labels.
+- **Level H (30%):** Maximum recovery (enables logo embedding in center without data loss).
+
+#### 2. Python Generation Example (`qrcode`)
+```python
+import qrcode
+
+# Generate high-reliability shipping QR Code
+qr = qrcode.QRCode(
+    version=1,
+    error_correction=qrcode.constants.ERROR_CORRECT_M,
+    box_size=10,
+    border=4
+)
+qr.add_data("https://tools.usps.com/go/TrackConfirmAction?tLabels=9400111899562537689100")
+qr.make(fit=True)
+
+img = qr.make_image(fill_color="black", back_color="white")
+img.save("usps_tracking_qr.png")
+```
+
+#### 3. React Frontend Component (`qrcode.react`)
+```jsx
+import { QRCodeSVG } from 'qrcode.react';
+
+export function ShippingQrBadge({ trackingUrl, trackingNumber }) {
+  return (
+    <div className="p-3 bg-white border border-slate-200 rounded-xl flex flex-col items-center">
+      <QRCodeSVG value={trackingUrl || trackingNumber} size={128} level="M" includeMargin={true} />
+      <span className="font-mono text-xs font-bold text-slate-800 mt-1">{trackingNumber}</span>
+    </div>
+  );
+}
+```
 
 ---
 
