@@ -18,7 +18,6 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   // Existing ID Verification States
   const [selectedFile, setSelectedFile] = useState(null);
@@ -119,7 +118,6 @@ export default function App() {
         onNavigate={(page) => setCurrentPage(page)}
         onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenAbout={() => setIsAboutOpen(true)}
       />
 
       {/* HOME PAGE: Landing with 3 Feature Cards (ID Verify, Shipping Label, QR Barcode) */}
@@ -329,58 +327,6 @@ export default function App() {
                 className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-sm transition"
               >
                 Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* About Modal */}
-      {isAboutOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="p-5 bg-gradient-to-r from-sky-600 to-indigo-600 text-white flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
-                  <Bot className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold">Utility</h3>
-                  <p className="text-xs text-white/80">Version 2.5.0 Enterprise</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsAboutOpen(false)}
-                className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/20 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6 space-y-4 text-xs text-slate-600 leading-relaxed">
-              <div className="p-3 bg-sky-50 border border-sky-100 rounded-xl text-sky-900 flex items-center space-x-3">
-                <ShieldCheck className="w-6 h-6 text-sky-600 flex-shrink-0" />
-                <div>
-                  <strong className="block text-slate-900">ID Document Verification:</strong>
-                  Automated OCR extraction and validation for Aadhaar, PAN Card, and Driving Licence with OpenCV preprocessing.
-                </div>
-              </div>
-              <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-900 flex items-center space-x-3">
-                <Package className="w-6 h-6 text-emerald-600 flex-shrink-0" />
-                <div>
-                  <strong className="block text-slate-900">Shipping Label Scanner:</strong>
-                  Multi-image logistics parsing (1–3 images), field extraction (Ship To, Ship From, Order, Dimensions, Items), and ZXing-CPP Barcode / QR matrix detection.
-                </div>
-              </div>
-              <div className="text-[11px] text-slate-400 pt-2 border-t border-slate-100">
-                Privacy Policy: All processed documents are protected by strict local hardware fingerprint isolation and an automated 30-day retention schedule.
-              </div>
-            </div>
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
-              <button
-                onClick={() => setIsAboutOpen(false)}
-                className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition"
-              >
-                Close
               </button>
             </div>
           </div>

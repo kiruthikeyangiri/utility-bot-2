@@ -98,15 +98,6 @@ export default function Sidebar({
         onClose();
         if (onOpenSettings) onOpenSettings();
       }
-    },
-    {
-      id: 'about',
-      label: 'About',
-      icon: Info,
-      action: () => {
-        onClose();
-        if (onOpenAbout) onOpenAbout();
-      }
     }
   ];
 
@@ -183,14 +174,6 @@ export default function Sidebar({
               </button>
             );
           })}
-        </div>
-
-        {/* Drawer Footer */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/50">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span className="font-medium">Version</span>
-            <span className="font-semibold text-slate-700">v2.5.0</span>
-          </div>
         </div>
 
       </div>
