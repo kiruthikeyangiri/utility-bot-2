@@ -15,6 +15,8 @@ import {
 import { extractShippingApi } from '../services/api';
 import ShippingResultsView from './ShippingResultsView';
 
+const MAX_IMAGES = 10;
+
 export default function ShippingScanner({ settings = {} }) {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [previews, setPreviews] = useState([]);
@@ -48,8 +50,8 @@ export default function ShippingScanner({ settings = {} }) {
     }
 
     const combined = [...selectedFiles, ...filtered];
-    if (combined.length > 3) {
-      setErrorMessage('Maximum 3 shipping label images allowed. Please select up to 3 images.');
+    if (combined.length > MAX_IMAGES) {
+      setErrorMessage(`Maximum ${MAX_IMAGES} shipping label images allowed. Please select up to ${MAX_IMAGES} images.`);
       return;
     }
 
@@ -117,8 +119,8 @@ export default function ShippingScanner({ settings = {} }) {
       setErrorMessage('Please upload at least 1 shipping label image.');
       return;
     }
-    if (selectedFiles.length > 3) {
-      setErrorMessage('Maximum 3 shipping label images allowed.');
+    if (selectedFiles.length > MAX_IMAGES) {
+      setErrorMessage(`Maximum ${MAX_IMAGES} shipping label images allowed.`);
       return;
     }
 
@@ -244,12 +246,12 @@ export default function ShippingScanner({ settings = {} }) {
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onClick={() => {
-              if (selectedFiles.length < 3 && fileInputRef.current) {
+              if (selectedFiles.length < MAX_IMAGES && fileInputRef.current) {
                 fileInputRef.current.click();
               }
             }}
             className={`border-2 border-dashed rounded-2xl p-8 text-center transition cursor-pointer flex flex-col items-center justify-center space-y-3 ${
-              selectedFiles.length >= 3 
+              selectedFiles.length >= MAX_IMAGES 
                 ? 'border-slate-200 bg-slate-50/50 cursor-not-allowed opacity-80' 
                 : 'border-slate-300 hover:border-sky-500 hover:bg-sky-50/30'
             }`}
@@ -260,7 +262,7 @@ export default function ShippingScanner({ settings = {} }) {
               multiple
               accept="image/jpeg,image/jpg,image/png"
               onChange={handleFileChange}
-              disabled={selectedFiles.length >= 3 || isLoading}
+              disabled={selectedFiles.length >= MAX_IMAGES || isLoading}
               className="hidden"
             />
 
@@ -270,18 +272,18 @@ export default function ShippingScanner({ settings = {} }) {
 
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-slate-800">
-                {selectedFiles.length >= 3 
-                  ? 'Maximum 3 Images Reached' 
+                {selectedFiles.length >= MAX_IMAGES 
+                  ? `Maximum ${MAX_IMAGES} Images Reached` 
                   : 'Drag & Drop Shipping Label Images, or Click to Browse'}
               </h3>
               <p className="text-xs text-slate-500">
-                Upload 1, 2, or 3 images (JPG, JPEG, PNG). Every label is analyzed independently.
+                Upload up to {MAX_IMAGES} images (JPG, JPEG, PNG). Every label is analyzed independently.
               </p>
             </div>
 
             <div className="flex items-center space-x-2 pt-2">
               <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                {selectedFiles.length} / 3 Uploaded
+                {selectedFiles.length} / {MAX_IMAGES} Uploaded
               </span>
             </div>
           </div>
@@ -293,14 +295,14 @@ export default function ShippingScanner({ settings = {} }) {
                 <span className="font-bold text-slate-700">
                   Ready to Scan ({selectedFiles.length} Image{selectedFiles.length > 1 ? 's' : ''}):
                 </span>
-                {selectedFiles.length < 3 && (
+                {selectedFiles.length < MAX_IMAGES && (
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isLoading}
                     className="flex items-center space-x-1 text-sky-600 hover:text-sky-700 font-semibold"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Add Another Image ({3 - selectedFiles.length} remaining)</span>
+                    <span>Add Another Image ({MAX_IMAGES - selectedFiles.length} remaining)</span>
                   </button>
                 )}
               </div>

@@ -50,7 +50,7 @@ export default function HomePage({ onNavigate }) {
       iconBg: 'bg-emerald-50 border-emerald-100',
       description: 'End-to-end shipping label intelligence with automated multi-angle image stitching.',
       bullets: [
-        'Upload 1–3 label photos per shipment',
+        'Upload multiple label photos per shipment',
         'Deterministic tracking cross-check (High/Medium/Mismatch)',
         'Extracted Shipper, Consignee, Order & Items',
         'Multi-pass ZXing-CPP 1D/2D code decode'

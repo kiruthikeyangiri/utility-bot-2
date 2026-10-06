@@ -581,8 +581,8 @@ async def extract_shipping_labels(
     """
     if not files or len(files) == 0:
         raise HTTPException(status_code=400, detail="At least 1 shipping label image is required.")
-    if len(files) > 3:
-        raise HTTPException(status_code=400, detail="Maximum 3 shipping label images allowed per request.")
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 shipping label images allowed per batch request.")
 
     results: List[ShippingLabelResult] = []
 
