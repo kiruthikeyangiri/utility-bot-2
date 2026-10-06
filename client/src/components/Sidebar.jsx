@@ -58,32 +58,28 @@ export default function Sidebar({
       label: 'Home',
       icon: Home,
       action: () => handleNav('home'),
-      active: currentPage === 'home',
-      description: 'Main suite & tool selector'
+      active: currentPage === 'home'
     },
     {
       id: 'id_verification',
       label: 'ID Verification',
       icon: ShieldCheck,
       action: () => handleNav('id_verification'),
-      active: currentPage === 'id_verification',
-      description: 'Aadhaar, PAN, DL documents'
+      active: currentPage === 'id_verification'
     },
     {
       id: 'shipping_scanner',
       label: 'Shipping Label Scanner',
       icon: Package,
       action: () => handleNav('shipping_scanner'),
-      active: currentPage === 'shipping_scanner',
-      description: 'Multi-image logistics & courier labels'
+      active: currentPage === 'shipping_scanner'
     },
     {
       id: 'qr_tools',
       label: 'QR & Barcode Tools',
       icon: QrCode,
       action: () => handleNav('qr_tools'),
-      active: currentPage === 'qr_tools',
-      description: 'Generate and scan QR / Barcode'
+      active: currentPage === 'qr_tools'
     },
     {
       id: 'history',
@@ -92,8 +88,7 @@ export default function Sidebar({
       action: () => {
         onClose();
         if (onOpenHistory) onOpenHistory();
-      },
-      description: 'Applicant & scan records'
+      }
     },
     {
       id: 'settings',
@@ -102,8 +97,7 @@ export default function Sidebar({
       action: () => {
         onClose();
         if (onOpenSettings) onOpenSettings();
-      },
-      description: 'OCR & model preferences'
+      }
     },
     {
       id: 'about',
@@ -112,8 +106,7 @@ export default function Sidebar({
       action: () => {
         onClose();
         if (onOpenAbout) onOpenAbout();
-      },
-      description: 'Version, technology & legal'
+      }
     }
   ];
 
@@ -137,7 +130,6 @@ export default function Sidebar({
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-900 leading-tight">Utility</h2>
-              <p className="text-xs text-slate-500">Document & Label Suite</p>
             </div>
           </div>
 
@@ -182,22 +174,10 @@ export default function Sidebar({
                     <div className="text-sm font-medium leading-tight truncate">
                       {item.label}
                     </div>
-                    {item.description && (
-                      <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                        {item.description}
-                      </div>
-                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-1.5 flex-shrink-0 ml-2">
-                  {item.badge && (
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                      item.badgeColor || (isCurrent ? 'bg-sky-100 text-sky-800 border-sky-200' : 'bg-slate-100 text-slate-600 border-slate-200')
-                    }`}>
-                      {item.badge}
-                    </span>
-                  )}
                   <ChevronRight className={`w-4 h-4 transition ${isCurrent ? 'text-sky-600' : 'text-slate-300 group-hover:text-slate-500'}`} />
                 </div>
               </button>
@@ -206,13 +186,10 @@ export default function Sidebar({
         </div>
 
         {/* Drawer Footer */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/50 space-y-2">
+        <div className="p-4 border-t border-slate-200 bg-slate-50/50">
           <div className="flex items-center justify-between text-xs text-slate-500">
             <span className="font-medium">Version</span>
             <span className="font-semibold text-slate-700">v2.5.0</span>
-          </div>
-          <div className="text-[11px] text-slate-400 leading-normal">
-            Enterprise Document Verification & Multi-Label Intelligence Suite.
           </div>
         </div>
 

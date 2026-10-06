@@ -81,13 +81,10 @@ export default function HomePage({ onNavigate }) {
     <div className="space-y-10 py-4 animate-in fade-in duration-300">
       
       {/* Hero Section */}
-      <div className="text-center space-y-2 max-w-3xl mx-auto pt-2">
+      <div className="text-center max-w-3xl mx-auto pt-2">
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
           Select a Tool to Begin
         </h1>
-        <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-          Streamline ID validation, logistics waybill extraction, and QR/Barcode workflows with high-accuracy computer vision and AI.
-        </p>
       </div>
 
       {/* 3 Core Workflow Cards (Matching User Sketch) */}
