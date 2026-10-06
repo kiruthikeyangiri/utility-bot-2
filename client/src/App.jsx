@@ -9,6 +9,7 @@ import HistoryDrawer from './components/HistoryDrawer';
 import ShippingScanner from './components/ShippingScanner';
 import QRTools from './components/QRTools';
 import HomePage from './components/HomePage';
+import SettingsPanel from './components/SettingsPanel';
 import { extractDocumentApi, getHealthApi } from './services/api';
 import { ScanText, Eye, FileText, Code, AlertCircle, Loader2, ArrowRight, X, Bot, ShieldCheck, Package } from 'lucide-react';
 

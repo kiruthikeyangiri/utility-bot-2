@@ -10,7 +10,7 @@ export default function SettingsPanel({ settings, onChange }) {
     'groq/compound-mini',
     'llama-3.3-70b-versatile',
   ]);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(true);
   const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
