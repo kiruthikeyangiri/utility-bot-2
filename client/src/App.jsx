@@ -8,12 +8,13 @@ import JsonViewer from './components/JsonViewer';
 import HistoryDrawer from './components/HistoryDrawer';
 import ShippingScanner from './components/ShippingScanner';
 import QRTools from './components/QRTools';
+import HomePage from './components/HomePage';
 import { extractDocumentApi, getHealthApi } from './services/api';
 import { ScanText, Eye, FileText, Code, AlertCircle, Loader2, ArrowRight, X, Bot, ShieldCheck, Package } from 'lucide-react';
 
 export default function App() {
-  // Page Routing State: 'id_verification' | 'shipping_scanner'
-  const [currentPage, setCurrentPage] = useState('id_verification');
+  // Page Routing State: 'home' | 'id_verification' | 'shipping_scanner' | 'qr_tools'
+  const [currentPage, setCurrentPage] = useState('home');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
@@ -106,6 +107,7 @@ export default function App() {
         onToggleHistory={() => setIsHistoryOpen(true)}
         isConnected={isDbConnected}
         activePage={currentPage}
+        onNavigate={(page) => setCurrentPage(page)}
       />
 
       {/* Slide-out Sidebar Drawer */}
@@ -118,6 +120,13 @@ export default function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenAbout={() => setIsAboutOpen(true)}
       />
+
+      {/* HOME PAGE: Landing with 3 Feature Cards (ID Verify, Shipping Label, QR Barcode) */}
+      {currentPage === 'home' && (
+        <main className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <HomePage onNavigate={(page) => setCurrentPage(page)} />
+        </main>
+      )}
 
       {/* PAGE 1: SHIPPING LABEL SCANNER */}
       {currentPage === 'shipping_scanner' && (

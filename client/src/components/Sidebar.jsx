@@ -57,9 +57,9 @@ export default function Sidebar({
       id: 'home',
       label: 'Home',
       icon: Home,
-      action: () => handleNav('id_verification'),
-      active: currentPage === 'id_verification',
-      description: 'Main dashboard & ID verification'
+      action: () => handleNav('home'),
+      active: currentPage === 'home',
+      description: 'Main suite & tool selector'
     },
     {
       id: 'id_verification',
