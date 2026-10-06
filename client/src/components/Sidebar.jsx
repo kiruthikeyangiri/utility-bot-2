@@ -67,7 +67,6 @@ export default function Sidebar({
       icon: ShieldCheck,
       action: () => handleNav('id_verification'),
       active: currentPage === 'id_verification',
-      badge: 'Active',
       description: 'Aadhaar, PAN, DL documents'
     },
     {
@@ -76,8 +75,6 @@ export default function Sidebar({
       icon: Package,
       action: () => handleNav('shipping_scanner'),
       active: currentPage === 'shipping_scanner',
-      badge: 'Active',
-      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
       description: 'Multi-image logistics & courier labels'
     },
     {
@@ -86,8 +83,6 @@ export default function Sidebar({
       icon: QrCode,
       action: () => handleNav('qr_tools'),
       active: currentPage === 'qr_tools',
-      badge: 'New',
-      badgeColor: 'bg-sky-100 text-sky-800 border-sky-200',
       description: 'Generate and scan QR / Barcode'
     },
     {
