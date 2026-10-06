@@ -18,7 +18,6 @@ export default function HomePage({ onNavigate }) {
     {
       id: 'id_verification',
       title: 'ID Verification',
-      subtitle: 'KYC & Identity Document Intelligence',
       badge: 'Identity Suite',
       badgeColor: 'bg-sky-100 text-sky-800 border-sky-200',
       gradient: 'from-sky-600 to-indigo-600',
@@ -39,7 +38,6 @@ export default function HomePage({ onNavigate }) {
     {
       id: 'shipping_scanner',
       title: 'Shipping Label Scanner',
-      subtitle: 'Multi-Image Logistics & Waybill Parser',
       badge: 'Logistics AI',
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
       gradient: 'from-emerald-600 to-teal-600',
@@ -60,7 +58,6 @@ export default function HomePage({ onNavigate }) {
     {
       id: 'qr_tools',
       title: 'QR & Barcode Tools',
-      subtitle: 'Generation & Standalone Matrix Scanner',
       badge: 'Code Engine',
       badgeColor: 'bg-violet-100 text-violet-800 border-violet-200',
       gradient: 'from-violet-600 to-purple-600',
@@ -118,9 +115,6 @@ export default function HomePage({ onNavigate }) {
                   <h2 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
                     {feat.title}
                   </h2>
-                  <p className="text-xs font-semibold text-slate-500 mt-0.5">
-                    {feat.subtitle}
-                  </p>
                   <p className="text-xs text-slate-600 mt-2.5 leading-relaxed">
                     {feat.description}
                   </p>
