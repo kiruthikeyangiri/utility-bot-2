@@ -3,11 +3,12 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Times New Roman', Times, serif;
   color-scheme: light;
 }
 
 body {
+  font-family: 'Times New Roman', Times, serif;
   background-color: #f8fafc;
   color: #0f172a;
 }

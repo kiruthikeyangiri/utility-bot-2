@@ -14,7 +14,7 @@ export default function Navbar({ onToggleSidebar, onToggleHistory, isConnected, 
       case 'shipping_scanner':
         return {
           title: 'Shipping Scanner',
-          subtitle: 'Multi-Label OCR • Barcode & QR Extraction',
+          subtitle: 'Multi-Label OCR, Barcode & QR Extraction',
           badge: 'Shipping',
           badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
         };
@@ -29,7 +29,7 @@ export default function Navbar({ onToggleSidebar, onToggleHistory, isConnected, 
       default:
         return {
           title: 'Document Verification',
-          subtitle: 'Aadhaar • PAN • Driving Licence Verification',
+          subtitle: 'Aadhaar, PAN, Driving Licence Verification',
           badge: 'ID Verify',
           badgeColor: 'bg-sky-50 text-sky-700 border-sky-200'
         };

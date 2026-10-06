@@ -4,7 +4,6 @@ import {
   Package, 
   QrCode, 
   ArrowRight, 
-  Sparkles, 
   CheckCircle2, 
   ScanText, 
   Cpu, 
@@ -86,11 +85,10 @@ export default function HomePage({ onNavigate }) {
       
       {/* Hero Section */}
       <div className="text-center space-y-3 max-w-3xl mx-auto pt-2">
-        <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold shadow-xs">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Utility Bot 2.0 • AI-Powered Document & Vision Suite</span>
+        <div className="inline-flex items-center px-4 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-semibold shadow-xs">
+          <span>Utility Bot 2.0 - AI-Powered Document and Vision Suite</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+        <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
           Select a Tool to Begin
         </h1>
         <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
