@@ -691,6 +691,7 @@ class QRGenerateRequest(BaseModel):
 
 
 @app.post("/generate-qr")
+@app.post("/generate-qr/")
 def generate_qr_code_endpoint(payload: QRGenerateRequest):
     """
     Standalone QR Code Generator & Verification Endpoint.
@@ -716,6 +717,7 @@ def generate_qr_code_endpoint(payload: QRGenerateRequest):
 
 
 @app.post("/scan-code")
+@app.post("/scan-code/")
 async def scan_optical_code_endpoint(file: UploadFile = File(...)):
     """
     Standalone QR & Barcode Scanner Endpoint.
@@ -749,6 +751,7 @@ async def scan_optical_code_endpoint(file: UploadFile = File(...)):
 
 
 @app.post("/scan-document-codes")
+@app.post("/scan-document-codes/")
 async def scan_document_codes_endpoint(
     file: UploadFile = File(...),
     min_confidence: float = Form(20.0)
