@@ -55,8 +55,8 @@ flowchart TD
     %% WORKFLOW 2: SHIPPING LABEL SCANNER
     %% ==========================================
     subgraph ShipWorkflow["Workflow 2: Shipping Label & Logistics Scanner"]
-        ShipUpload["📤 Upload 1 to 3 Label Images (JPG / PNG)"]
-        MultiLoop["🔁 Independent Image Processing Loop (Max 3)"]
+        ShipUpload["📤 Upload 1 to 10 Label Images (JPG / PNG)"]
+        MultiLoop["🔁 Independent Image Processing Loop (Max 10)"]
         
         subgraph ParallelEngines["Parallel Vision & Barcode Pipelines"]
             CodeScan["🔍 Multi-Pass Barcode & QR Engine<br/>• Pass 1: ZXing-CPP Native<br/>• Pass 2: Grayscale + Upscale + CLAHE + Sharpen<br/>• Pass 3: Adaptive Threshold + 90°/180°/270° Rotation<br/>• Pass 4: OpenCV QRCodeDetector Fallback"]
@@ -306,9 +306,10 @@ export function ShippingQrBadge({ trackingUrl, trackingNumber }) {
 
 | Capability | ID Verification Engine | Shipping Label Scanner |
 | :--- | :--- | :--- |
-| **Input Support** | Single ID Document (Aadhaar, PAN, DL) | Batch 1 to 3 Shipping Labels (JPG/PNG) |
+| **Input Support** | Single ID Document (Aadhaar, PAN, DL) | Batch 1 to 10 Shipping Labels (JPG/PNG) |
 | **Core OCR** | RapidOCR ONNX Runtime ($< 300\text{ ms}$) | RapidOCR ONNX + Spatial Layout Reconstructor |
 | **Code Scanning** | Embedded Document QR Reader | Multi-Pass Barcode & QR Reader (`zxing-cpp`) |
+| **Visual Overlay** | Bounding Box Overlay with Confidence | Multi-Color Overlay (Text, QR/Matrix, Barcode) |
 | **Vision AI** | YOLOv8 Neural Portrait Cropper | 2-Column Cluster Detection & Column Sorter |
 | **LLM Inference** | Groq Cloud LPU (Llama 3.3 70B) | Groq Cloud LPU with Spatial Prompt Rules |
 | **Offline Fallback**| 100% Offline Local Regex Engine | 100% Offline Spatial Heuristic Parser |
