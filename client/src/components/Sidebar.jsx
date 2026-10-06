@@ -3,6 +3,7 @@ import {
   Home, 
   ShieldCheck, 
   Package, 
+  QrCode,
   History, 
   Settings, 
   Info, 
@@ -75,9 +76,19 @@ export default function Sidebar({
       icon: Package,
       action: () => handleNav('shipping_scanner'),
       active: currentPage === 'shipping_scanner',
-      badge: 'New',
+      badge: 'Active',
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
       description: 'Multi-image logistics & courier labels'
+    },
+    {
+      id: 'qr_tools',
+      label: 'QR & Barcode Tools',
+      icon: QrCode,
+      action: () => handleNav('qr_tools'),
+      active: currentPage === 'qr_tools',
+      badge: 'New',
+      badgeColor: 'bg-sky-100 text-sky-800 border-sky-200',
+      description: 'Generate and scan QR / Barcode'
     },
     {
       id: 'history',

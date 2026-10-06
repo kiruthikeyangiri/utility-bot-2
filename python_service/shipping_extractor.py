@@ -817,6 +817,55 @@ def cross_validate_codes_with_ocr(
     result.awb_number = result.order.awb_number
     result.tracking_number = result.order.tracking_number
     result.barcode_ocr_match_status = barcode_match_status
+
+    # Deterministic Multi-Source Cross-Check
+    active_tracking = result.tracking_number or result.awb_number or ""
+    norm_active = normalize_ocr_digits(active_tracking)
+    
+    ocr_has_tracking = bool(norm_active)
+    barcode_matched_tracking = False
+    qr_matched_tracking = False
+
+    if barcodes and norm_active:
+        for b in barcodes:
+            b_val = normalize_ocr_digits(str(b.get("value", "")))
+            if b_val and (b_val == norm_active or b_val in norm_active or norm_active in b_val):
+                barcode_matched_tracking = True
+                break
+
+    if qr_codes and norm_active:
+        for q in qr_codes:
+            q_val = str(q.get("value", "")).strip()
+            norm_q = normalize_ocr_digits(q_val)
+            if (norm_active and norm_active in norm_q) or (norm_q and norm_q in norm_active) or (active_tracking and active_tracking in q_val):
+                qr_matched_tracking = True
+                break
+
+    matched_sources = sum([1 for m in [ocr_has_tracking, barcode_matched_tracking, qr_matched_tracking] if m])
+    total_sources_present = sum([1 for p in [ocr_has_tracking, bool(barcodes), bool(qr_codes)] if p])
+
+    if barcode_match_status == "CONFLICT":
+        cross_check_status = "MISMATCH"
+    elif matched_sources >= 3:
+        cross_check_status = "HIGH_CONFIDENCE"
+    elif matched_sources == 2:
+        cross_check_status = "HIGH_CONFIDENCE" if (barcode_matched_tracking and (ocr_has_tracking or qr_matched_tracking)) else "MEDIUM_CONFIDENCE"
+    elif matched_sources == 1 and total_sources_present > 1 and not barcode_matched_tracking and not qr_matched_tracking:
+        cross_check_status = "MEDIUM_CONFIDENCE"
+    elif matched_sources == 1:
+        cross_check_status = "SINGLE_SOURCE"
+    else:
+        cross_check_status = "UNVERIFIED"
+
+    cross_check_data = {
+        "tracking_number": active_tracking or None,
+        "ocr_match": ocr_has_tracking,
+        "barcode_match": barcode_matched_tracking,
+        "qr_match": qr_matched_tracking,
+        "status": cross_check_status
+    }
+
+    result.cross_check = cross_check_data
     result.cross_validation = {
         "status": barcode_match_status,
         "matched_field": matched_field,
@@ -824,7 +873,8 @@ def cross_validate_codes_with_ocr(
         "corrected_from_ocr": corrected_from_ocr,
         "tracking_url": tracking_url,
         "barcodes_count": len(barcodes),
-        "qr_codes_count": len(qr_codes)
+        "qr_codes_count": len(qr_codes),
+        "cross_check": cross_check_data
     }
 
 

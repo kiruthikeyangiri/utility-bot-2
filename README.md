@@ -10,13 +10,14 @@
 [![MongoDB Atlas](https://img.shields.io/badge/Database-MongoDB_Atlas_Cloud-47A248.svg?style=flat&logo=mongodb)](https://www.mongodb.com)
 [![Compliance](https://img.shields.io/badge/Privacy-DPDP_%26_UIDAI_Compliant-success.svg)](#-data-privacy--enterprise-security)
 
-**Utility Bot** is an enterprise-grade AI automation suite providing two production workflows in a single unified system:
+**Utility Bot** is an enterprise-grade AI automation suite providing three production workflows in a single unified system:
 1. **🆔 Government ID Card Verification & Biometric KYC**: Instant classification, portrait extraction, Aadhaar masking, SFace 128-D biometric face matching, anti-spoofing liveness, dual-ID cross-verification, and cryptographically verified Identity Reference Cards.
-2. **📦 Shipping Label Scanner & Logistics Extraction**: Multi-image batch processing (1–3 parcel labels simultaneously), multi-pass Barcode & QR matrix decoding (`zxing-cpp`), spatial 2-column layout reconstruction, and intelligent extraction of **SHIP TO**, **SHIP FROM**, **ORDER**, **PACKAGE**, and **ITEMS / PRODUCT MANIFEST**.
+2. **📦 Shipping Label Scanner & Logistics Extraction**: Multi-image batch processing (1–3 parcel labels simultaneously), multi-pass Barcode & QR matrix decoding (`zxing-cpp`), spatial 2-column layout reconstruction, deterministic multi-source tracking cross-check, and intelligent extraction of **SHIP TO**, **SHIP FROM**, **ORDER**, **PACKAGE**, and **ITEMS / PRODUCT MANIFEST**.
+3. **🔲 QR & Barcode Tools Suite**: Standalone QR Code Generator across 12 standard payload types with automated local verification, standalone multi-format Barcode/QR scanner, and combined document OCR + optical code extractor.
 
 ---
 
-## 🗺️ Complete Dual-Engine System Architecture
+## 🗺️ Complete Unified System Architecture
 
 ```mermaid
 flowchart TD
@@ -25,6 +26,7 @@ flowchart TD
     
     NavChoice -->|Option 1| IDFlow["🆔 ID Card Verification Flow"]
     NavChoice -->|Option 2| ShippingFlow["📦 Shipping Label Scanner Flow"]
+    NavChoice -->|Option 3| QRToolsFlow["🔲 QR & Barcode Tools Flow"]
 
     %% ==========================================
     %% WORKFLOW 1: ID VERIFICATION
@@ -43,6 +45,66 @@ flowchart TD
         IDUpload --> QualityCheck --> IDPreproc
         IDPreproc --> YOLOCrop
         IDPreproc --> RapidID
+        RapidID --> DecisionGate
+        DecisionGate -->|Supported Pattern| GroqID --> PydanticID
+        DecisionGate -->|Offline / No API Key| RegexID --> PydanticID
+    end
+
+    %% ==========================================
+    %% WORKFLOW 2: SHIPPING LABEL SCANNER
+    %% ==========================================
+    subgraph ShipWorkflow["Workflow 2: Shipping Label & Logistics Scanner"]
+        ShipUpload["📤 Upload 1 to 3 Label Images (JPG / PNG)"]
+        MultiLoop["🔁 Independent Image Processing Loop (Max 3)"]
+        
+        subgraph ParallelEngines["Parallel Vision & Barcode Pipelines"]
+            CodeScan["🔍 Multi-Pass Barcode & QR Engine<br/>• Pass 1: ZXing-CPP Native<br/>• Pass 2: Grayscale + Upscale + CLAHE + Sharpen<br/>• Pass 3: Adaptive Threshold + 90°/180°/270° Rotation<br/>• Pass 4: OpenCV QRCodeDetector Fallback"]
+            RapidShip["📖 RapidOCR Word & Bounding Box Engine"]
+        end
+        
+        SpatialSort["📐 Spatial 2-Column Layout Reconstructor<br/><i>Separates Left (Destination) & Right (Origin) columns</i>"]
+        ShipLLM["🧠 LLM Semantic Extractor (Groq / Llama 3.3)"]
+        ShipCrossCheck["🛡️ Multi-Source Deterministic Cross-Check<br/><i>OCR vs. Barcode vs. QR (HIGH / MEDIUM / MISMATCH)</i>"]
+        ShipSchema["📦 Standard Shipping JSON Model<br/>• SHIP TO (Receiver)<br/>• SHIP FROM (Sender)<br/>• ORDER (ID, AWB, Tracking, Payment)<br/>• PACKAGE (Weight, Dims)<br/>• ITEMS (Products, Qty, Price, Total)"]
+        
+        ShipUpload --> MultiLoop
+        MultiLoop --> CodeScan
+        MultiLoop --> RapidShip
+        RapidShip --> SpatialSort
+        SpatialSort --> ShipLLM --> ShipCrossCheck --> ShipSchema
+        CodeScan --> ShipCrossCheck
+    end
+
+    %% ==========================================
+    %% WORKFLOW 3: QR & BARCODE TOOLS
+    %% ==========================================
+    subgraph QRToolsWorkflow["Workflow 3: QR & Barcode Tools Suite"]
+        QRGenChoice{"Choose Tool"}
+        
+        subgraph QRGenPipeline["1. Verified QR Generator (qr_generator.py)"]
+            QRInput["📝 12 Payload Formats (URL, Wi-Fi, vCard, SMS, Location, Shipping, JSON)"]
+            QRCapacity["📏 Capacity Guardrail Check (Max ~2.8 KB)"]
+            QRECC["🛡️ Error Correction Config (L 7%, M 15%, Q 25%, H 30%)"]
+            QRRender["🎨 Render PNG / SVG Image Matrix"]
+            QRAutoVerify["🔍 Local Auto-Verification (Decodes via code_reader.py)"]
+            
+            QRInput --> QRCapacity --> QRECC --> QRRender --> QRAutoVerify
+        end
+        
+        subgraph QRScannerPipeline["2. Standalone / Combined Code Scanner"]
+            ScanUpload["📤 Upload Code Image"]
+            ScanEngine["🔍 Multi-Pass ZXing-CPP + OpenCV Reader"]
+            ScanOCR["📖 Optional RapidOCR Document Extractor"]
+            ScanResults["📊 Formatted Separation: QR Codes + 1D Barcodes + OCR Text"]
+            
+            ScanUpload --> ScanEngine --> ScanResults
+            ScanUpload --> ScanOCR --> ScanResults
+        end
+        
+        QRToolsFlow --> QRGenChoice
+        QRGenChoice -->|Tab 1| QRGenPipeline
+        QRGenChoice -->|Tab 2| QRScannerPipeline
+    end
         RapidID --> DecisionGate
         DecisionGate -->|Supported Pattern| GroqID --> PydanticID
         DecisionGate -->|Offline / No API Key| RegexID --> PydanticID
@@ -435,12 +497,19 @@ ALL 13 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]
 
 ## 📡 REST API Reference
 
-### **1. Shipping Label & Logistics Scanner**
+### **1. QR & Barcode Tools Suite**
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/extract-shipping` | Upload 1 to 3 shipping labels (`files: List[UploadFile]`). Runs parallel multi-pass ZXing-CPP Barcode/QR decoding, RapidOCR, 2-column spatial reconstruction, and LLM/heuristic extraction. Returns separate JSON result per image. |
+| `POST` | `/generate-qr` | Standalone QR Code Generator across 12 standardized payload types (URL, Wi-Fi, vCard, SMS, Email, Location, Shipping, JSON) with automatic local verification and capacity validation. |
+| `POST` | `/scan-code` | Standalone multi-pass Barcode & QR Code reader. Uploads 1 image and extracts all detected 1D/2D optical codes. |
+| `POST` | `/scan-document-codes` | Combined Document Scanner: Simultaneously executes RapidOCR text extraction and optical Barcode/QR detection on a single document image. |
 
-### **2. Document Extraction & Confirmation**
+### **2. Shipping Label & Logistics Scanner**
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/extract-shipping` | Upload 1 to 3 shipping labels (`files: List[UploadFile]`). Runs parallel multi-pass ZXing-CPP Barcode/QR decoding, RapidOCR, 2-column spatial reconstruction, deterministic multi-source tracking cross-check, and LLM/heuristic extraction. Returns separate JSON result per image. |
+
+### **3. Document Extraction & Confirmation**
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
 | `POST` | `/extract` | Upload identity image; executes Pre-LLM Gate, YOLOv8 portrait crop, RapidOCR, and Pydantic normalization. |

@@ -675,6 +675,132 @@ async def extract_shipping_labels(
     return results
 
 
+# =============================================================================
+# QR Code Generator & Standalone Optical Scanner Endpoints
+# =============================================================================
+
+from pydantic import BaseModel, Field
+
+class QRGenerateRequest(BaseModel):
+    type: str = Field(default="text", description="QR payload type: text, url, phone, email, sms, wifi, vcard, location, product, order, shipping, json")
+    data: Optional[Any] = Field(default=None, description="Direct text or payload string")
+    fields: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Structured fields for specialized QR types (e.g. ssid, password, vcard info)")
+    size: int = Field(default=400, ge=100, le=2400, description="Image dimension in pixels (e.g. 200, 400, 600, 800, 1200)")
+    error_correction: str = Field(default="M", description="Error correction level: L (7%), M (15%), Q (25%), H (30%)")
+    format: str = Field(default="png", description="Output format: png or svg")
+
+
+@app.post("/generate-qr")
+def generate_qr_code_endpoint(payload: QRGenerateRequest):
+    """
+    Standalone QR Code Generator & Verification Endpoint.
+    Formats 12 standardized payload types (URL, Wi-Fi, vCard, SMS, Email, Location, Shipping, JSON),
+    checks data capacity, selects optimal QR version, renders PNG/SVG, and auto-verifies readability.
+    """
+    try:
+        from qr_generator import generate_and_verify_qr
+        result = generate_and_verify_qr(
+            qr_type=payload.type,
+            data=payload.data,
+            fields=payload.fields,
+            size=payload.size,
+            error_correction=payload.error_correction,
+            output_format=payload.format
+        )
+        return result
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    except Exception as exc:
+        logger.error(f"QR Generation error: {exc}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate QR Code: {str(exc)}")
+
+
+@app.post("/scan-code")
+async def scan_optical_code_endpoint(file: UploadFile = File(...)):
+    """
+    Standalone QR & Barcode Scanner Endpoint.
+    Upload 1 image (JPG, JPEG, PNG). Runs multi-pass ZXing-CPP + OpenCV reader across 11+ formats
+    and separates QR codes from 1D linear barcodes.
+    """
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="An image file is required.")
+
+    filename = file.filename
+    try:
+        contents = await file.read()
+        pil_image = Image.open(io.BytesIO(contents))
+        if pil_image.mode not in ("RGB", "L"):
+            pil_image = pil_image.convert("RGB")
+        cv2_img = pil_to_cv2(pil_image)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image format for '{filename}': {str(e)}")
+
+    codes_dict = extract_codes(cv2_img)
+    qr_list = codes_dict.get("qr_codes", [])
+    bar_list = codes_dict.get("barcodes", [])
+
+    return {
+        "success": True,
+        "filename": filename,
+        "qr_codes": qr_list,
+        "barcodes": bar_list,
+        "total_detected": len(qr_list) + len(bar_list)
+    }
+
+
+@app.post("/scan-document-codes")
+async def scan_document_codes_endpoint(
+    file: UploadFile = File(...),
+    min_confidence: float = Form(20.0)
+):
+    """
+    Combined OCR + QR + Barcode Document Scanning Endpoint.
+    Simultaneously extracts printed document text via RapidOCR and detects all optical codes (QR & Barcodes).
+    """
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="An image file is required.")
+
+    filename = file.filename
+    try:
+        contents = await file.read()
+        pil_image = Image.open(io.BytesIO(contents))
+        if pil_image.mode not in ("RGB", "L"):
+            pil_image = pil_image.convert("RGB")
+        cv2_img = pil_to_cv2(pil_image)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image format for '{filename}': {str(e)}")
+
+    # 1. Barcode & QR Code extraction
+    codes_dict = extract_codes(cv2_img)
+    qr_list = codes_dict.get("qr_codes", [])
+    bar_list = codes_dict.get("barcodes", [])
+
+    # 2. RapidOCR Text Extraction
+    try:
+        ocr_res = extract_ocr_data(cv2_img, min_confidence=min_confidence)
+        ocr_data = {
+            "raw_text": ocr_res.raw_text,
+            "confidence": round(ocr_res.average_confidence, 1),
+            "word_count": len(ocr_res.words)
+        }
+    except Exception as ocr_err:
+        logger.warning(f"OCR scan warning on {filename}: {ocr_err}")
+        ocr_data = {
+            "raw_text": "",
+            "confidence": 0.0,
+            "word_count": 0
+        }
+
+    return {
+        "success": True,
+        "filename": filename,
+        "ocr": ocr_data,
+        "qr_codes": qr_list,
+        "barcodes": bar_list,
+        "total_detected": len(qr_list) + len(bar_list)
+    }
+
+
 
 # -----------------------------------------------------------------------------
 # Unified Full-Stack Serving: React Client + FastAPI Backend in One Service

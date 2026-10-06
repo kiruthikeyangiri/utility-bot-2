@@ -6,8 +6,8 @@ import ResultsView from './components/ResultsView';
 import VisualPipeline from './components/VisualPipeline';
 import JsonViewer from './components/JsonViewer';
 import HistoryDrawer from './components/HistoryDrawer';
-import SettingsPanel from './components/SettingsPanel';
 import ShippingScanner from './components/ShippingScanner';
+import QRTools from './components/QRTools';
 import { extractDocumentApi, getHealthApi } from './services/api';
 import { ScanText, Eye, FileText, Code, AlertCircle, Loader2, ArrowRight, X, Bot, ShieldCheck, Package } from 'lucide-react';
 
@@ -126,8 +126,14 @@ export default function App() {
         </main>
       )}
 
+      {/* PAGE 2: QR & BARCODE TOOLS (Generator + Standalone Scanner) */}
+      {currentPage === 'qr_tools' && (
+        <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <QRTools />
+        </main>
+      )}
 
-      {/* PAGE 2: ID DOCUMENT VERIFICATION (Existing Workflow 100% Preserved) */}
+      {/* PAGE 3: ID DOCUMENT VERIFICATION (Existing Workflow 100% Preserved) */}
       {currentPage === 'id_verification' && (
         <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-6 flex flex-col justify-center">
           

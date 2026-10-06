@@ -287,5 +287,38 @@ export const extractShippingApi = async (files, options = {}) => {
   return response.data;
 };
 
+/**
+ * Generates a verified QR Code across 12 standardized payload types.
+ */
+export const generateQrApi = async (payload) => {
+  const response = await api.post('/generate-qr', payload);
+  return response.data;
+};
+
+/**
+ * Standalone optical scanner: Uploads 1 image to detect all Barcodes and QR codes.
+ */
+export const scanCodeApi = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post('/scan-code', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
+/**
+ * Combined scanner: Uploads 1 image to extract RapidOCR text AND all Barcode/QR codes.
+ */
+export const scanDocumentCodesApi = async (file, minConfidence = 20.0) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('min_confidence', minConfidence);
+  const response = await api.post('/scan-document-codes', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+};
+
 
 

@@ -502,6 +502,92 @@ ACME Corporation
     print("  [PASS] Global Geo Service & Shipping Date Normalization tests passed.")
 
 
+def test_qr_generator_and_standalone_scanner():
+    """Test Suite 14: Comprehensive QR Generation, 12 Payload Formats, Verification & Standalone Scanner."""
+    print("Testing QR Code Generator (12 Types), Capacity Limits & Auto-Verification...")
+    from qr_generator import generate_and_verify_qr, format_qr_payload
+
+    # 1. Plain Text
+    r_text = generate_and_verify_qr(qr_type="text", data="Hello Utility Bot 2")
+    assert r_text["success"] is True
+    assert r_text["verified"] is True
+    assert r_text["payload"] == "Hello Utility Bot 2"
+    assert "data:image/png;base64," in r_text["image_base64"]
+
+    # 2. Website URL
+    r_url = generate_and_verify_qr(qr_type="url", data="google.com")
+    assert r_url["payload"] == "https://google.com"
+    assert r_url["verified"] is True
+
+    # 3. Phone Number
+    r_phone = generate_and_verify_qr(qr_type="phone", data="+91 98765 43210")
+    assert r_phone["payload"] == "tel:+919876543210"
+    assert r_phone["verified"] is True
+
+    # 4. Email
+    r_email = generate_and_verify_qr(qr_type="email", fields={"email": "test@example.com", "subject": "Support"})
+    assert r_email["payload"] == "mailto:test@example.com?subject=Support"
+
+    # 5. SMS
+    r_sms = generate_and_verify_qr(qr_type="sms", fields={"phone": "+919876543210", "message": "Hello"})
+    assert r_sms["payload"] == "SMSTO:+919876543210:Hello"
+
+    # 6. Wi-Fi
+    r_wifi = generate_and_verify_qr(qr_type="wifi", fields={"ssid": "OfficeWiFi", "password": "pass", "auth_type": "WPA"})
+    assert r_wifi["payload"] == "WIFI:T:WPA;S:OfficeWiFi;P:pass;H:false;;"
+    assert r_wifi["verified"] is True
+
+    # 7. Contact / vCard 3.0
+    r_vcard = generate_and_verify_qr(qr_type="vcard", fields={"name": "Jane Doe", "phone": "+15551234", "company": "Acme Inc"})
+    assert "BEGIN:VCARD" in r_vcard["payload"]
+    assert "FN:Jane Doe" in r_vcard["payload"]
+    assert "ORG:Acme Inc" in r_vcard["payload"]
+
+    # 8. Location
+    r_loc = generate_and_verify_qr(qr_type="location", fields={"latitude": "13.0827", "longitude": "80.2707"})
+    assert r_loc["payload"] == "geo:13.0827,80.2707"
+
+    # 9. Product ID
+    r_prod = generate_and_verify_qr(qr_type="product", data="9812")
+    assert r_prod["payload"] == "PROD-9812"
+
+    # 10. Order ID
+    r_ord = generate_and_verify_qr(qr_type="order", data="2026-X")
+    assert r_ord["payload"] == "ORD-2026-X"
+
+    # 11. Shipping Tracking ID
+    r_ship = generate_and_verify_qr(qr_type="shipping", fields={"shipping_id": "10025"})
+    assert r_ship["payload"] == "SHIP-10025"
+
+    # 12. Structured JSON
+    r_json = generate_and_verify_qr(qr_type="json", data={"awb": "113431", "status": "IN_TRANSIT"})
+    assert '"awb":"113431"' in r_json["payload"]
+    assert r_json["verified"] is True
+
+    # 13. Test Capacity Guardrail (> 2.8 KB rejected)
+    oversized_data = "X" * 3500
+    try:
+        generate_and_verify_qr(qr_type="text", data=oversized_data)
+        assert False, "Oversized QR data should have raised a ValueError"
+    except ValueError as val_err:
+        assert "Data is too large for a QR Code" in str(val_err)
+
+    # 14. Test Multi-Source Shipping Cross-Check Confidence
+    from shipping_extractor import extract_shipping_label_data
+    sample_text = """SHIP TO: John Doe 123 Main St New York 10001
+TRACKING NUMBER: SHIP123456
+AWB: SHIP123456"""
+    barcodes_sample = [{"format": "Code128", "value": "SHIP123456"}]
+    qr_sample = [{"format": "QRCode", "value": "https://track.example.com/SHIP123456"}]
+    res_cross = extract_shipping_label_data(sample_text, barcodes=barcodes_sample, qr_codes=qr_sample)
+    assert res_cross.cross_check["status"] == "HIGH_CONFIDENCE"
+    assert res_cross.cross_check["ocr_match"] is True
+    assert res_cross.cross_check["barcode_match"] is True
+    assert res_cross.cross_check["qr_match"] is True
+
+    print("  [PASS] QR Code Generator, Capacity Limits & Standalone Scanner tests passed.")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("RUNNING UTILITY BOT ENTERPRISE TEST SUITE")
@@ -519,7 +605,9 @@ if __name__ == "__main__":
     test_shipping_label_extraction()
     test_barcode_qr_and_cross_validation()
     test_shipping_date_and_geo_service()
+    test_qr_generator_and_standalone_scanner()
     print("=" * 60)
-    print("ALL 13 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
+    print("ALL 14 TEST SUITES PASSED SUCCESSFULLY! [SUCCESS]")
     print("=" * 60)
+
 
