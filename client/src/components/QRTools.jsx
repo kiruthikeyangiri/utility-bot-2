@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { QrCode, Scan, Sparkles, Layers } from 'lucide-react';
+import React from 'react';
+import { useState } from 'react';
+import { QrCode, Scan, Layers } from 'lucide-react';
 import QRGenerator from './QRGenerator';
 import QRScanner from './QRScanner';
 

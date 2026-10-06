@@ -11,7 +11,6 @@ import {
   RefreshCw, 
   FileText,
   Layers,
-  Sparkles,
   Info,
   CheckCircle2
 } from 'lucide-react';

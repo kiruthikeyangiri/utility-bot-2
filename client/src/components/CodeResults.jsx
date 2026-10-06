@@ -11,8 +11,7 @@ import {
   ChevronUp,
   Search,
   BookOpen,
-  Layers,
-  Sparkles
+  Layers
 } from 'lucide-react';
 
 export const OPTICAL_CODE_CATALOG = [

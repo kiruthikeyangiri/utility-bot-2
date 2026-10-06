@@ -7,7 +7,6 @@ import {
   RefreshCw, 
   ShieldCheck, 
   AlertCircle, 
-  Sparkles,
   Link as LinkIcon,
   Phone,
   Mail,
@@ -609,7 +608,7 @@ export default function QRGenerator() {
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4" />
+                <QrCode className="w-4 h-4" />
                 <span>Generate & Verify QR Code</span>
               </>
             )}
