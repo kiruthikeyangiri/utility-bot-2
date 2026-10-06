@@ -105,36 +105,6 @@ flowchart TD
         QRGenChoice -->|Tab 1| QRGenPipeline
         QRGenChoice -->|Tab 2| QRScannerPipeline
     end
-        RapidID --> DecisionGate
-        DecisionGate -->|Supported Pattern| GroqID --> PydanticID
-        DecisionGate -->|Offline / No API Key| RegexID --> PydanticID
-    end
-
-    %% ==========================================
-    %% WORKFLOW 2: SHIPPING LABEL SCANNER
-    %% ==========================================
-    subgraph ShipWorkflow["Workflow 2: Shipping Label & Logistics Scanner"]
-        ShipUpload["📤 Upload 1 to 3 Label Images (JPG / PNG)"]
-        MultiLoop["🔁 Independent Image Processing Loop (Max 3)"]
-        
-        subgraph ParallelEngines["Parallel Vision & Barcode Pipelines"]
-            CodeScan["🔍 Multi-Pass Barcode & QR Engine<br/>• Pass 1: ZXing-CPP Native<br/>• Pass 2: Grayscale + Upscale + CLAHE + Sharpen<br/>• Pass 3: Adaptive Threshold + 90°/180°/270° Rotation<br/>• Pass 4: OpenCV QRCodeDetector Fallback"]
-            RapidShip["📖 RapidOCR Word & Bounding Box Engine"]
-        end
-        
-        SpatialSort["📐 Spatial 2-Column Layout Reconstructor<br/><i>Separates Left (Destination) & Right (Origin) columns</i>"]
-        ShipLLM["🧠 LLM Semantic Extractor (Groq / Llama 3.3)"]
-        ShipHeuristics["⚡ Spatial Heuristic Extractor & Disentangler<br/>• Token Spacing Normalizer (_clean_spaces)<br/>• Company vs. Personal Entity Router<br/>• Space & Pipe Delimited Table Parser"]
-        ShipSchema["📦 Standard Shipping JSON Model<br/>• SHIP TO (Receiver)<br/>• SHIP FROM (Sender)<br/>• ORDER (ID, AWB, Tracking, Payment)<br/>• PACKAGE (Weight, Dims)<br/>• ITEMS (Products, Qty, Price, Total)"]
-        
-        ShipUpload --> MultiLoop
-        MultiLoop --> CodeScan
-        MultiLoop --> RapidShip
-        RapidShip --> SpatialSort
-        SpatialSort --> ShipLLM --> ShipSchema
-        SpatialSort --> ShipHeuristics --> ShipSchema
-        CodeScan --> ShipSchema
-    end
 
     %% BIOMETRICS & VERIFICATION EXTENSIONS
     subgraph KYCBiometrics["Biometric & Dual-ID Verification Extensions"]
@@ -164,6 +134,7 @@ flowchart TD
     %% Styling
     style IDWorkflow fill:#f0fdf4,stroke:#86efac,stroke-width:2px;
     style ShipWorkflow fill:#eff6ff,stroke:#93c5fd,stroke-width:2px;
+    style QRToolsWorkflow fill:#fefce8,stroke:#fef08a,stroke-width:2px;
     style KYCBiometrics fill:#fdf4ff,stroke:#d8b4fe,stroke-width:2px;
     style StorageGateways fill:#f8fafc,stroke:#94a3b8,stroke-width:2px;
 ```
