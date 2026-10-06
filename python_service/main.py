@@ -741,9 +741,19 @@ async def scan_optical_code_endpoint(file: UploadFile = File(...)):
     qr_list = codes_dict.get("qr_codes", [])
     bar_list = codes_dict.get("barcodes", [])
 
+    # Generate visual detection overlay with bounding boxes
+    annotated_image_b64 = None
+    try:
+        if len(qr_list) > 0 or len(bar_list) > 0:
+            annotated_cv2 = draw_bounding_boxes(cv2_img, None, show_confidence=False, codes=codes_dict)
+            annotated_image_b64 = cv2_to_base64(annotated_cv2)
+    except Exception as annot_err:
+        logger.warning(f"Overlay warning on {filename}: {annot_err}")
+
     return {
         "success": True,
         "filename": filename,
+        "annotated_image": annotated_image_b64,
         "qr_codes": qr_list,
         "barcodes": bar_list,
         "total_detected": len(qr_list) + len(bar_list)

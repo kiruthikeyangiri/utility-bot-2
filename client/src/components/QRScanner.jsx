@@ -284,6 +284,30 @@ export default function QRScanner() {
               </div>
             )}
 
+            {/* Visual Detection Overlay Card */}
+            {results?.annotated_image && (
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-4 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-700 font-bold">
+                  <span className="flex items-center space-x-1.5">
+                    <Eye className="w-4 h-4 text-sky-600" />
+                    <span className="uppercase tracking-wider">Visual Detection &amp; Bounding Boxes:</span>
+                  </span>
+                  <span className="text-[11px] text-slate-600 font-medium">
+                    {ocrData && <span className="text-emerald-700 font-bold">● Green: Text &nbsp;•&nbsp; </span>}
+                    <span className="text-purple-700 font-bold">● Purple: QR/Matrix</span> &nbsp;•&nbsp;
+                    <span className="text-amber-700 font-bold">● Orange: 1D Barcode</span>
+                  </span>
+                </div>
+                <div className="bg-slate-900/5 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center p-2 max-h-[380px]">
+                  <img
+                    src={results.annotated_image}
+                    alt="Visual Detection Overlay"
+                    className="max-h-[360px] w-auto object-contain rounded-lg shadow-xs"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* 1. QR CODES */}
             {qrCodes.length > 0 && (
               <div className="space-y-2.5">
@@ -465,28 +489,6 @@ export default function QRScanner() {
                     </span>
                   )}
                 </div>
-
-                {/* Visual OCR Bounding Box Image */}
-                {results?.annotated_image && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-slate-600 font-semibold">
-                      <span className="flex items-center space-x-1.5">
-                        <Eye className="w-3.5 h-3.5 text-sky-600" />
-                        <span>Visual Detection &amp; Bounding Boxes:</span>
-                      </span>
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        <span className="text-emerald-700">● Green: Text</span> • <span className="text-purple-700">● Purple: QR/Matrix</span> • <span className="text-amber-700">● Orange: 1D Barcode</span>
-                      </span>
-                    </div>
-                    <div className="bg-slate-900/5 rounded-xl border border-slate-200 overflow-hidden flex items-center justify-center p-2 max-h-[340px]">
-                      <img
-                        src={results.annotated_image}
-                        alt="OCR Detection Overlay"
-                        className="max-h-[320px] w-auto object-contain rounded-lg shadow-xs"
-                      />
-                    </div>
-                  </div>
-                )}
 
                 <div className="space-y-1.5">
                   <span className="text-xs font-semibold text-slate-700">Extracted Raw Text:</span>
