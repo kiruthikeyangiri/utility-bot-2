@@ -1,15 +1,20 @@
-﻿services:
+services:
   - type: web
-    name: utility-bot-app
+    name: utility-bot
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
+    region: oregon
+    autoDeploy: true
+    healthCheckPath: /health
     envVars:
+      - key: PORT
+        value: 10000
+      - key: GROQ_API_KEY
+        sync: false
       - key: MONGODB_URI
         sync: false
       - key: MONGODB_APP_ID
         sync: false
       - key: MONGODB_DATA_API_KEY
-        sync: false
-      - key: GROQ_API_KEY
         sync: false
