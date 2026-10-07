@@ -10,6 +10,16 @@ import socket
 import subprocess
 import time
 
+# Ensure UTF-8 output encoding on all terminals
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
+
 def free_port_if_busy(port: int) -> int:
     """Checks if port is in use. If so, frees it or finds next open port."""
     def is_port_in_use(p: int) -> bool:
@@ -20,8 +30,8 @@ def free_port_if_busy(port: int) -> int:
     if not is_port_in_use(port):
         return port
 
-    print(f"\n⚠️  Port {port} is already in use by an existing process.")
-    print("🔄 Attempting to free port automatically...")
+    print(f"\n[Notice] Port {port} is already in use by an existing process.")
+    print("[Action] Attempting to free port automatically...")
 
     if sys.platform == "win32":
         try:
@@ -43,13 +53,13 @@ def free_port_if_busy(port: int) -> int:
             pass
 
     if not is_port_in_use(port):
-        print(f"✅ Port {port} freed successfully.\n")
+        print(f"[Success] Port {port} freed successfully.\n")
         return port
 
     # If still busy, find next available port
     for fallback in range(port + 1, port + 20):
         if not is_port_in_use(fallback):
-            print(f"✅ Switched to available port {fallback}.\n")
+            print(f"[Success] Switched to available port {fallback}.\n")
             return fallback
 
     return port
@@ -77,8 +87,8 @@ if __name__ == "__main__":
     print("\n" + "=" * 65)
     print("  UTILITY BOT - ENTERPRISE KYC & VERIFICATION SERVER")
     print("=" * 65)
-    print(f"  • Web Dashboard & Unified App : http://localhost:{port}")
-    print(f"  • Interactive Swagger API Docs : http://localhost:{port}/docs")
+    print(f"  * Web Dashboard & Unified App : http://localhost:{port}")
+    print(f"  * Interactive Swagger API Docs : http://localhost:{port}/docs")
     print("=" * 65 + "\n")
 
     uvicorn.run(app, host=host, port=port)
